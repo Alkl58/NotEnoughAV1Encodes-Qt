@@ -149,7 +149,7 @@
     <enum>QTabWidget::Rounded</enum>
    </property>
    <property name="currentIndex">
-    <number>3</number>
+    <number>0</number>
    </property>
    <widget class="QWidget" name="tab">
     <attribute name="title">
@@ -422,7 +422,7 @@
        <x>410</x>
        <y>10</y>
        <width>391</width>
-       <height>131</height>
+       <height>111</height>
       </rect>
      </property>
      <property name="title">
@@ -941,8 +941,11 @@
       <property name="maximum">
        <number>9</number>
       </property>
+      <property name="value">
+       <number>5</number>
+      </property>
       <property name="sliderPosition">
-       <number>4</number>
+       <number>5</number>
       </property>
       <property name="orientation">
        <enum>Qt::Horizontal</enum>
@@ -1113,6 +1116,9 @@
       </property>
      </widget>
      <widget class="QSpinBox" name="spinBoxVBR">
+      <property name="enabled">
+       <bool>false</bool>
+      </property>
       <property name="geometry">
        <rect>
         <x>180</x>

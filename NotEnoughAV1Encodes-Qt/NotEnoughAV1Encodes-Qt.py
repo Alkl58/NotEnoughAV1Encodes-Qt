@@ -117,6 +117,11 @@ class neav1e(QtWidgets.QMainWindow):
         self.horizontalSliderEncoderSpeed.valueChanged.connect(self.setSpeedSliderValue)
         self.comboBoxSplittingMethod.currentIndexChanged.connect(self.setSummarySplitting)
 
+        # Controls Encoder
+        self.comboBoxEncoder.currentIndexChanged.connect(self.setEncoderUI)
+        self.comboBoxPasses.currentIndexChanged.connect(self.setEncoderPassRav1e)
+        self.radioButtonVBR.toggled.connect(self.toggleVBRQ)
+
         # !!! CHANGE IN UI FILE !!!
         self.labelSplittingChunkLength.hide()
         self.spinBoxChunking.hide()
@@ -132,6 +137,40 @@ class neav1e(QtWidgets.QMainWindow):
         self.show()  
 
     #  ═══════════════════════════════════════ UI Logic ═══════════════════════════════════════
+    def toggleVBRQ(self, a):
+        if a:
+            self.horizontalSliderQ.setEnabled(False)
+            self.spinBoxVBR.setEnabled(True)
+        else:
+            self.horizontalSliderQ.setEnabled(True)
+            self.spinBoxVBR.setEnabled(False)
+
+
+    def setEncoderPassRav1e(self, n):
+        if n == 1 and self.comboBoxEncoder.currentIndex() == 1:
+            self.comboBoxPasses.setCurrentIndex(0) # rav1e two pass still broken
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Warning)
+            msg.setText("rav1e currently does not support 2pass encoding.")
+            msg.setWindowTitle("Attention!")
+            msg.exec()
+
+
+    def setEncoderUI(self, n):
+        if n == 0:
+            self.horizontalSliderEncoderSpeed.setMaximum(9)
+            self.horizontalSliderEncoderSpeed.setValue(5)
+            self.horizontalSliderQ.setMaximum(63)
+            self.horizontalSliderQ.setValue(28)
+        elif n == 1:
+            #rav1e
+            self.horizontalSliderEncoderSpeed.setMaximum(10)
+            self.horizontalSliderEncoderSpeed.setValue(6)
+            self.horizontalSliderQ.setMaximum(255)
+            self.horizontalSliderQ.setValue(100)
+            self.comboBoxPasses.setCurrentIndex(0) # rav1e two pass still broken
+
+
     def setSummarySplitting(self):
         self.labelSummarySplitting.setText(str(self.comboBoxSplittingMethod.currentText()))
 
@@ -366,6 +405,16 @@ class neav1e(QtWidgets.QMainWindow):
                 settings += " --end-usage=q --cq-level=" + str(self.horizontalSliderQ.value())
             elif self.radioButtonVBR.isChecked() == True:
                 settings += " --end-usage=vbr --target-bitrate=" + str(self.spinBoxVBR.value())
+        elif encoder == 1: # rav1e
+            self.encoderOutput = " --output "
+            self.encoderPasses = " " # rav1e still does not support 2pass encoding
+            settings = "rav1e - --speed " + str(self.horizontalSliderEncoderSpeed.value())
+            if self.radioButtonCQ.isChecked() == True:
+                settings += " --quantizer " + str(self.horizontalSliderQ.value())
+            elif self.radioButtonVBR.isChecked() == True:
+                settings += " --bitrate " + str(self.spinBoxVBR.value())
+            settings += " --threads 4 --tile-cols 2 --tile-rows 1"
+
         self.encoderSettings = settings
 
 
@@ -380,6 +429,7 @@ class neav1e(QtWidgets.QMainWindow):
 
         passes = self.comboBoxPasses.currentIndex()
         currentIndex = self.comboBoxSplittingMethod.currentIndex()
+
         if currentIndex == 0:
             # FFmpeg Scene Detect
             with open(os.path.join(self.tempDir, self.tempDirFileName, "splits.txt")) as f:
@@ -395,7 +445,6 @@ class neav1e(QtWidgets.QMainWindow):
                         self.videoQueueFirstPass.append("ffmpeg -i " + tempInputFile + " " + seekPoint.rstrip() + " -pix_fmt " + self.pipeColorFMT + " " + self.filterCommand + " -color_range 0 -vsync 0 -f yuv4mpegpipe - | " + self.encoderSettings + self.encoderPasses + self.encoderPassOne + self.encoderOutput + "/dev/null " + self.encoderOutputStats + tempOutputFileLog)
                         self.videoQueueSecondPass.append("ffmpeg -i " + tempInputFile + " " + seekPoint.rstrip() + " -pix_fmt " + self.pipeColorFMT + " " + self.filterCommand + " -color_range 0 -vsync 0 -f yuv4mpegpipe - | " + self.encoderSettings + self.encoderPasses + self.encoderPassTwo + self.encoderOutput + tempOutputFile + self.encoderOutputStats + tempOutputFileLog)
                     counter += 1
-
         elif currentIndex == 1:
             # Equal Chunking
             files = os.listdir(os.path.join(self.tempDir, self.tempDirFileName, "Chunks"))
