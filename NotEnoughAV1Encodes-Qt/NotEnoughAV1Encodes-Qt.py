@@ -91,7 +91,8 @@ class neav1e(QtWidgets.QMainWindow):
     pipeColorFMT = None
     filterCommand = None
 
-    tempDir = os.path.join(os.path.dirname(__file__), ".temp")
+    tempDir = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".temp")
+    print(tempDir)
     tempDirFileName = None
 
     def __init__(self):
@@ -158,6 +159,7 @@ class neav1e(QtWidgets.QMainWindow):
 
     def setEncoderUI(self, n):
         if n == 0:
+            #aomenc
             self.horizontalSliderEncoderSpeed.setMaximum(9)
             self.horizontalSliderEncoderSpeed.setValue(5)
             self.horizontalSliderQ.setMaximum(63)
@@ -169,6 +171,13 @@ class neav1e(QtWidgets.QMainWindow):
             self.horizontalSliderQ.setMaximum(255)
             self.horizontalSliderQ.setValue(100)
             self.comboBoxPasses.setCurrentIndex(0) # rav1e two pass still broken
+        elif n == 2:
+            #svt-av1
+            self.horizontalSliderQ.setMaximum(63)
+            self.horizontalSliderQ.setValue(28)
+            self.horizontalSliderEncoderSpeed.setMaximum(8)
+            self.horizontalSliderEncoderSpeed.setValue(5)
+            self.comboBoxWorkerCount.setCurrentIndex(0)
 
 
     def setSummarySplitting(self):
@@ -217,7 +226,7 @@ class neav1e(QtWidgets.QMainWindow):
         self.labelVideoDestination.setText(fname)
         self.videoOutput = fname
 
-    #  ═══════════════════════════════════════ Splitting ══════════════════════════════════════
+    #  ════════════════════════════════════════ Filters ═══════════════════════════════════════
 
     def setVideoFilters(self):
         crop = self.groupBoxCrop.isChecked() == True
@@ -279,8 +288,8 @@ class neav1e(QtWidgets.QMainWindow):
             else:
                 return None # unimplemented
 
-    #  ════════════════════════════════════════ Filters ═══════════════════════════════════════
-
+    #  ═══════════════════════════════════════ Splitting ══════════════════════════════════════
+    
     def splitting(self):
         # Create Temp Folder if not existant
         path = Path(os.path.join(self.tempDir, self.tempDirFileName, "Chunks"))
@@ -348,8 +357,6 @@ class neav1e(QtWidgets.QMainWindow):
         # Start the thread
         self.threadScene.start()
 
-
-
     #  ═════════════════════════════════════════ Main ═════════════════════════════════════════
     def mainEntry(self):
         # Check if input and output is set
@@ -414,7 +421,19 @@ class neav1e(QtWidgets.QMainWindow):
             elif self.radioButtonVBR.isChecked() == True:
                 settings += " --bitrate " + str(self.spinBoxVBR.value())
             settings += " --threads 4 --tile-cols 2 --tile-rows 1"
-
+        elif encoder == 2: # svt-av1
+            if passes == 0:
+                self.encoderPasses = " --passes 1 "
+            elif passes == 1:
+                self.encoderPasses = " --irefresh-type 2 --passes 2 "
+                self.encoderPassOne = " --pass 1 "
+                self.encoderPassTwo = " --pass 2 "
+            self.encoderOutput = " -b "
+            settings = "SvtAv1EncApp -i stdin --preset " + str(self.horizontalSliderEncoderSpeed.value())
+            if self.radioButtonCQ.isChecked() == True:
+                settings += " --rc 0 -q " + str(self.horizontalSliderQ.value())
+            elif self.radioButtonVBR.isChecked() == True:
+                settings += " --rc 1 --tbr " + str(self.spinBoxVBR.value())
         self.encoderSettings = settings
 
 
@@ -429,6 +448,7 @@ class neav1e(QtWidgets.QMainWindow):
 
         passes = self.comboBoxPasses.currentIndex()
         currentIndex = self.comboBoxSplittingMethod.currentIndex()
+        encoder = self.comboBoxEncoder.currentIndex()
 
         if currentIndex == 0:
             # FFmpeg Scene Detect
@@ -439,11 +459,18 @@ class neav1e(QtWidgets.QMainWindow):
                     tempInputFile = '\u0022' + self.videoInput + '\u0022'
                     tempOutputFile = '\u0022' + os.path.join(self.tempDir, self.tempDirFileName, "Chunks", "split" + outFileName + ".ivf") + '\u0022'
                     if passes == 0:
-                        self.videoQueueFirstPass.append("ffmpeg -i " + tempInputFile + " " + seekPoint.rstrip() + " -pix_fmt " + self.pipeColorFMT + " " + self.filterCommand + " -color_range 0 -vsync 0 -f yuv4mpegpipe - | " + self.encoderSettings + self.encoderPasses + self.encoderOutput + tempOutputFile)
+                        if encoder == 2: # svt-av1 specific
+                            self.videoQueueFirstPass.append("ffmpeg -i " + tempInputFile + " " + seekPoint.rstrip() + " -pix_fmt " + self.pipeColorFMT + " " + self.filterCommand + " -color_range 0 -vsync 0 -nostdin -f yuv4mpegpipe - | " + self.encoderSettings + self.encoderPasses + self.encoderOutput + tempOutputFile)
+                        else:
+                            self.videoQueueFirstPass.append("ffmpeg -i " + tempInputFile + " " + seekPoint.rstrip() + " -pix_fmt " + self.pipeColorFMT + " " + self.filterCommand + " -color_range 0 -vsync 0 -f yuv4mpegpipe - | " + self.encoderSettings + self.encoderPasses + self.encoderOutput + tempOutputFile)
                     elif passes == 1:
                         tempOutputFileLog = '\u0022' + os.path.join(self.tempDir, self.tempDirFileName, "Chunks", "split" + outFileName + ".stats") + '\u0022'
-                        self.videoQueueFirstPass.append("ffmpeg -i " + tempInputFile + " " + seekPoint.rstrip() + " -pix_fmt " + self.pipeColorFMT + " " + self.filterCommand + " -color_range 0 -vsync 0 -f yuv4mpegpipe - | " + self.encoderSettings + self.encoderPasses + self.encoderPassOne + self.encoderOutput + "/dev/null " + self.encoderOutputStats + tempOutputFileLog)
-                        self.videoQueueSecondPass.append("ffmpeg -i " + tempInputFile + " " + seekPoint.rstrip() + " -pix_fmt " + self.pipeColorFMT + " " + self.filterCommand + " -color_range 0 -vsync 0 -f yuv4mpegpipe - | " + self.encoderSettings + self.encoderPasses + self.encoderPassTwo + self.encoderOutput + tempOutputFile + self.encoderOutputStats + tempOutputFileLog)
+                        if encoder == 2: # svt-av1 specific
+                            self.videoQueueFirstPass.append("ffmpeg -i " + tempInputFile + " " + seekPoint.rstrip() + " -pix_fmt " + self.pipeColorFMT + " " + self.filterCommand + " -color_range 0 -vsync 0 -nostdin -f yuv4mpegpipe - | " + self.encoderSettings + self.encoderPasses + self.encoderPassOne + self.encoderOutput + "/dev/null " + self.encoderOutputStats + tempOutputFileLog)
+                            self.videoQueueSecondPass.append("ffmpeg -i " + tempInputFile + " " + seekPoint.rstrip() + " -pix_fmt " + self.pipeColorFMT + " " + self.filterCommand + " -color_range 0 -vsync 0 -nostdin -f yuv4mpegpipe - | " + self.encoderSettings + self.encoderPasses + self.encoderPassTwo + self.encoderOutput + tempOutputFile + self.encoderOutputStats + tempOutputFileLog)
+                        else:
+                            self.videoQueueFirstPass.append("ffmpeg -i " + tempInputFile + " " + seekPoint.rstrip() + " -pix_fmt " + self.pipeColorFMT + " " + self.filterCommand + " -color_range 0 -vsync 0 -f yuv4mpegpipe - | " + self.encoderSettings + self.encoderPasses + self.encoderPassOne + self.encoderOutput + "/dev/null " + self.encoderOutputStats + tempOutputFileLog)
+                            self.videoQueueSecondPass.append("ffmpeg -i " + tempInputFile + " " + seekPoint.rstrip() + " -pix_fmt " + self.pipeColorFMT + " " + self.filterCommand + " -color_range 0 -vsync 0 -f yuv4mpegpipe - | " + self.encoderSettings + self.encoderPasses + self.encoderPassTwo + self.encoderOutput + tempOutputFile + self.encoderOutputStats + tempOutputFileLog)
                     counter += 1
         elif currentIndex == 1:
             # Equal Chunking
@@ -454,11 +481,18 @@ class neav1e(QtWidgets.QMainWindow):
                     tempInputFile = '\u0022' + os.path.join(self.tempDir, self.tempDirFileName, "Chunks", file) + '\u0022'
                     tempOutputFile = '\u0022' + os.path.join(self.tempDir, self.tempDirFileName, "Chunks", os.path.splitext(os.path.basename(str(file)))[0] + ".ivf") + '\u0022'
                     if passes == 0:
-                        self.videoQueueFirstPass.append("ffmpeg -i " + tempInputFile + " -pix_fmt " + self.pipeColorFMT + " -color_range 0 -vsync 0 -f yuv4mpegpipe - | " + self.encoderSettings + self.encoderPasses + self.encoderOutput + tempOutputFile)
+                        if encoder == 2: # svt-av1 specific
+                            self.videoQueueFirstPass.append("ffmpeg -i " + tempInputFile + " -pix_fmt " + self.pipeColorFMT + " -color_range 0 -vsync 0 -nostdin -f yuv4mpegpipe - | " + self.encoderSettings + self.encoderPasses + self.encoderOutput + tempOutputFile)
+                        else:
+                            self.videoQueueFirstPass.append("ffmpeg -i " + tempInputFile + " -pix_fmt " + self.pipeColorFMT + " -color_range 0 -vsync 0 -f yuv4mpegpipe - | " + self.encoderSettings + self.encoderPasses + self.encoderOutput + tempOutputFile)
                     elif passes == 1:
                         tempOutputFileLog = '\u0022' + os.path.join(self.tempDir, self.tempDirFileName, "Chunks", os.path.splitext(os.path.basename(str(file)))[0] + ".stats") + '\u0022'
-                        self.videoQueueFirstPass.append("ffmpeg -i " + tempInputFile + " -pix_fmt " + self.pipeColorFMT + " -color_range 0 -vsync 0 -f yuv4mpegpipe - | " + self.encoderSettings + self.encoderPasses + self.encoderPassOne + self.encoderOutput + "/dev/null " + self.encoderOutputStats + tempOutputFileLog)
-                        self.videoQueueSecondPass.append("ffmpeg -i " + tempInputFile + " -pix_fmt " + self.pipeColorFMT + " -color_range 0 -vsync 0 -f yuv4mpegpipe - | " + self.encoderSettings + self.encoderPasses + self.encoderPassTwo + self.encoderOutput + tempOutputFile + self.encoderOutputStats + tempOutputFileLog)
+                        if encoder == 2: # svt-av1 specific
+                            self.videoQueueFirstPass.append("ffmpeg -i " + tempInputFile + " -pix_fmt " + self.pipeColorFMT + " -color_range 0 -vsync 0 -nostdin -f yuv4mpegpipe - | " + self.encoderSettings + self.encoderPasses + self.encoderPassOne + self.encoderOutput + "/dev/null " + self.encoderOutputStats + tempOutputFileLog)
+                            self.videoQueueSecondPass.append("ffmpeg -i " + tempInputFile + " -pix_fmt " + self.pipeColorFMT + " -color_range 0 -vsync 0 -nostdin -f yuv4mpegpipe - | " + self.encoderSettings + self.encoderPasses + self.encoderPassTwo + self.encoderOutput + tempOutputFile + self.encoderOutputStats + tempOutputFileLog)
+                        else:
+                            self.videoQueueFirstPass.append("ffmpeg -i " + tempInputFile + " -pix_fmt " + self.pipeColorFMT + " -color_range 0 -vsync 0 -f yuv4mpegpipe - | " + self.encoderSettings + self.encoderPasses + self.encoderPassOne + self.encoderOutput + "/dev/null " + self.encoderOutputStats + tempOutputFileLog)
+                            self.videoQueueSecondPass.append("ffmpeg -i " + tempInputFile + " -pix_fmt " + self.pipeColorFMT + " -color_range 0 -vsync 0 -f yuv4mpegpipe - | " + self.encoderSettings + self.encoderPasses + self.encoderPassTwo + self.encoderOutput + tempOutputFile + self.encoderOutputStats + tempOutputFileLog)
 
     #  ═══════════════════════════════════════ Encoding ═══════════════════════════════════════
     def mainEncode(self):

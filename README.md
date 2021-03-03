@@ -12,7 +12,7 @@ For Windows users check out the non Qt version: ![NotEnoughAV1Encodes](https://g
 - [X] Multithreading with QThread
 - [X] Basic aomenc encoding
 - [X] Basic rav1e encoding
-- [ ] Basic svt-av1 encoding
+- [X] Basic svt-av1 encoding
 - [ ] Advanced aomenc settings
 - [ ] Advanced rav1e settings
 - [ ] Advanced svt-av1 settings
