@@ -92,15 +92,14 @@ class neav1e(QtWidgets.QMainWindow):
     filterCommand = None
 
     tempDir = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".temp")
-    print(tempDir)
     tempDirFileName = None
 
     def __init__(self):
         super(neav1e, self).__init__()
         pth = os.path.join(os.path.dirname(__file__), "form.ui")  # Set path ui
         uic.loadUi(pth, self)  # Load the .ui file
-        self.setFixedWidth(1036)  # Set Window Width
-        self.setFixedHeight(600)  # Set Window Height
+        self.setFixedWidth(842)  # Set Window Width
+        self.setFixedHeight(568)  # Set Window Height
         self.setWindowTitle("NotEnoughAV1Encodes-Qt")  # Set Window Title
 
         # Controls IO
@@ -122,12 +121,16 @@ class neav1e(QtWidgets.QMainWindow):
         self.comboBoxEncoder.currentIndexChanged.connect(self.setEncoderUI)
         self.comboBoxPasses.currentIndexChanged.connect(self.setEncoderPassRav1e)
         self.radioButtonVBR.toggled.connect(self.toggleVBRQ)
+        self.checkBoxAdvancedSettings.stateChanged.connect(self.toggleAdvancedSettings)
+        self.checkBoxAomencDenoise.stateChanged.connect(self.toggleAomencDenoise)
 
         # !!! CHANGE IN UI FILE !!!
         self.labelSplittingChunkLength.hide()
         self.spinBoxChunking.hide()
         self.checkBoxSplittingReencode.hide()
         self.comboBoxSplittingReencode.hide()
+
+        self.tabWidget.setTabEnabled(4, False)
 
         # Set Worker Count ComobBox
         for i in range(1, psutil.cpu_count(logical = False) + 1):
@@ -138,6 +141,12 @@ class neav1e(QtWidgets.QMainWindow):
         self.show()  
 
     #  ═══════════════════════════════════════ UI Logic ═══════════════════════════════════════
+    def toggleAomencDenoise(self):
+        self.spinBoxAomencDenoise.setEnabled(self.checkBoxAomencDenoise.isChecked() == True)
+
+    def toggleAdvancedSettings(self):
+        self.tabWidget.setTabEnabled(4, self.checkBoxAdvancedSettings.isChecked() == True)
+
     def toggleVBRQ(self, a):
         if a:
             self.horizontalSliderQ.setEnabled(False)
@@ -145,7 +154,6 @@ class neav1e(QtWidgets.QMainWindow):
         else:
             self.horizontalSliderQ.setEnabled(True)
             self.spinBoxVBR.setEnabled(False)
-
 
     def setEncoderPassRav1e(self, n):
         if n == 1 and self.comboBoxEncoder.currentIndex() == 1:
@@ -155,7 +163,6 @@ class neav1e(QtWidgets.QMainWindow):
             msg.setText("rav1e currently does not support 2pass encoding.")
             msg.setWindowTitle("Attention!")
             msg.exec()
-
 
     def setEncoderUI(self, n):
         if n == 0:
@@ -178,7 +185,6 @@ class neav1e(QtWidgets.QMainWindow):
             self.horizontalSliderEncoderSpeed.setMaximum(8)
             self.horizontalSliderEncoderSpeed.setValue(5)
             self.comboBoxWorkerCount.setCurrentIndex(0)
-
 
     def setSummarySplitting(self):
         self.labelSummarySplitting.setText(str(self.comboBoxSplittingMethod.currentText()))
@@ -398,9 +404,11 @@ class neav1e(QtWidgets.QMainWindow):
                 self.encoderPasses = " --passes=2 "
                 self.encoderPassOne = " --pass=1 "
                 self.encoderPassTwo = " --pass=2 "
+
             self.encoderOutput = " --output="
             self.encoderOutputStats = " --fpf="
             settings = "aomenc - --bit-depth=" + self.comboBoxBitDepth.currentText()
+
             if fmt == 0: # Color Format
                 settings += " --i420"
             elif fmt == 1:
@@ -408,10 +416,29 @@ class neav1e(QtWidgets.QMainWindow):
             elif fmt == 2:
                 settings += " --i444"
             settings += " --cpu-used=" + str(self.horizontalSliderEncoderSpeed.value())
+
             if self.radioButtonCQ.isChecked() == True:
                 settings += " --end-usage=q --cq-level=" + str(self.horizontalSliderQ.value())
             elif self.radioButtonVBR.isChecked() == True:
                 settings += " --end-usage=vbr --target-bitrate=" + str(self.spinBoxVBR.value())
+
+            if self.checkBoxAdvancedSettings.isChecked() == False:
+                # Basic Settings
+                settings += " --threads=4 --tile-columns=1 --tile-rows=2 "
+            else:
+                # Advanced Settings
+                settings += " --threads=" + str(self.comboBoxAomencThreads.currentIndex())                  # Threads
+                settings += " --tile-rows=" + str(self.comboBoxAomencTileRows.currentIndex())               # Tile Rows
+                settings += " --tile-columns=" + str(self.comboBoxAomencTileCols.currentIndex())            # Tile Columns
+                settings += " --kf-max-dist=" + str(self.spinBoxAomencGOP.value())                          # Max GOP
+                settings += " --lag-in-frames=" + str(self.spinBoxAomencLagInFrames.value())                # Frame Buffer
+                settings += " --tune=" + self.comboBoxAomencTune.currentText()                              # Tune
+                settings += " --aq-mode=" + str(self.comboBoxAomencAQMode.currentIndex())                   # AQ Mode
+                settings += " --color-primaries=" + self.comboBoxAomencColorPrimaries.currentText()         # Color Primaries
+                settings += " --transfer-characteristics=" + self.comboBoxAomencColorTransfer.currentText() # Color Transfer
+                settings += " --matrix-coefficients=" + self.comboBoxAomencColorMatrix.currentText()        # Color Matrix 
+                if self.checkBoxAomencDenoise.isChecked() == True:
+                    settings += " --denoise-noise-level=" + str(self.spinBoxAomencDenoise.value())          # Denoise Noise Level 
         elif encoder == 1: # rav1e
             self.encoderOutput = " --output "
             self.encoderPasses = " " # rav1e still does not support 2pass encoding
@@ -435,6 +462,7 @@ class neav1e(QtWidgets.QMainWindow):
             elif self.radioButtonVBR.isChecked() == True:
                 settings += " --rc 1 --tbr " + str(self.spinBoxVBR.value())
         self.encoderSettings = settings
+        print(self.encoderSettings)
 
 
     def setQueue(self):

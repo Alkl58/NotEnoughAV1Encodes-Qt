@@ -3,7 +3,7 @@ Linux GUI for AV1 Encoders - aomenc, rav1e & svt-av1
 
 For Windows users check out the non Qt version: ![NotEnoughAV1Encodes](https://github.com/Alkl58/NotEnoughAV1Encodes)
 
-![](https://i.imgur.com/yOfyzCf.png)
+![](https://i.imgur.com/vAavhsE.png)
 
 ### Development Progress:
 - [X] Scene Based Splitting (FFmpeg)
@@ -13,11 +13,15 @@ For Windows users check out the non Qt version: ![NotEnoughAV1Encodes](https://g
 - [X] Basic aomenc encoding
 - [X] Basic rav1e encoding
 - [X] Basic svt-av1 encoding
-- [ ] Advanced aomenc settings
+- [X] Advanced aomenc settings
 - [ ] Advanced rav1e settings
 - [ ] Advanced svt-av1 settings
 - [ ] Save & Load Custom Presets
 - [ ] Basic Audio Encoding
 - [ ] Advanced Audio Encoding
 - [ ] (Basic Subtitle Support)
-- [ ] Batch encoding
+- [ ] Batch Encoding
+- [ ] Cancel Process
+- [ ] Resume Process
+- [ ] Clear temp files after encode
+- [ ] Logging
