@@ -132,6 +132,7 @@ class neav1e(QtWidgets.QMainWindow):
         self.comboBoxSplittingReencode.hide()
         self.groupBoxAom.show()
         self.groupBoxRav1e.hide()
+        self.groupBoxSvtav1.hide()
 
         self.tabWidget.setTabEnabled(4, False)
 
@@ -180,6 +181,7 @@ class neav1e(QtWidgets.QMainWindow):
             self.horizontalSliderQ.setValue(28)
             self.groupBoxAom.show()
             self.groupBoxRav1e.hide()
+            self.groupBoxSvtav1.hide()
         elif n == 1:
             #rav1e
             self.horizontalSliderEncoderSpeed.setMaximum(10)
@@ -189,6 +191,7 @@ class neav1e(QtWidgets.QMainWindow):
             self.comboBoxPasses.setCurrentIndex(0) # rav1e two pass still broken
             self.groupBoxAom.hide()
             self.groupBoxRav1e.show()
+            self.groupBoxSvtav1.hide()
         elif n == 2:
             #svt-av1
             self.horizontalSliderQ.setMaximum(63)
@@ -198,6 +201,7 @@ class neav1e(QtWidgets.QMainWindow):
             self.comboBoxWorkerCount.setCurrentIndex(0)
             self.groupBoxAom.hide()
             self.groupBoxRav1e.hide()
+            self.groupBoxSvtav1.show()
 
     def setSummarySplitting(self):
         self.labelSummarySplitting.setText(str(self.comboBoxSplittingMethod.currentText()))
@@ -502,8 +506,14 @@ class neav1e(QtWidgets.QMainWindow):
                 settings += " --rc 0 -q " + str(self.horizontalSliderQ.value())
             elif self.radioButtonVBR.isChecked() == True:
                 settings += " --rc 1 --tbr " + str(self.spinBoxVBR.value())
+            
+            if self.checkBoxRav1eContentLight.isChecked() == False:
+                settings += " --tile-columns " + str(self.comboBoxSvtTileCols.currentIndex())
+                settings += " --tile-rows " + str(self.comboBoxSvtTileRows.currentIndex())
+                settings += " --keyint " + str(self.spinBoxSvtGOP.value())
+                settings += " --adaptive-quantization " + str(self.comboBoxSvtAQ.currentIndex())
+        
         self.encoderSettings = settings
-        print(self.encoderSettings)
 
 
     def setQueue(self):

@@ -1929,6 +1929,9 @@
        <height>271</height>
       </rect>
      </property>
+     <property name="visible">
+      <bool>false</bool>
+     </property>
      <property name="title">
       <string>rav1e Settings</string>
      </property>
@@ -2542,7 +2545,7 @@
        <number>20000</number>
       </property>
      </widget>
-     <widget class="QGroupBox" name="groupBox_4">
+     <widget class="QGroupBox" name="groupBoxRav1eMastering">
       <property name="geometry">
        <rect>
         <x>520</x>
@@ -2940,6 +2943,201 @@
         <string>R</string>
        </property>
       </widget>
+     </widget>
+    </widget>
+    <widget class="QGroupBox" name="groupBoxSvtav1">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>10</y>
+       <width>791</width>
+       <height>271</height>
+      </rect>
+     </property>
+     <property name="title">
+      <string>svt-av1 Settings</string>
+     </property>
+     <widget class="QLabel" name="labelSvtRows_2">
+      <property name="geometry">
+       <rect>
+        <x>50</x>
+        <y>100</y>
+        <width>91</width>
+        <height>31</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Tile Rows:</string>
+      </property>
+     </widget>
+     <widget class="QComboBox" name="comboBoxSvtTileRows">
+      <property name="geometry">
+       <rect>
+        <x>140</x>
+        <y>100</y>
+        <width>101</width>
+        <height>32</height>
+       </rect>
+      </property>
+      <property name="currentIndex">
+       <number>2</number>
+      </property>
+      <item>
+       <property name="text">
+        <string>0</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>1</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>2</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>3</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>4</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>5</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>6</string>
+       </property>
+      </item>
+     </widget>
+     <widget class="QLabel" name="labelRav1eCols_2">
+      <property name="geometry">
+       <rect>
+        <x>50</x>
+        <y>60</y>
+        <width>91</width>
+        <height>31</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Tile Columns:</string>
+      </property>
+     </widget>
+     <widget class="QComboBox" name="comboBoxSvtTileCols">
+      <property name="geometry">
+       <rect>
+        <x>140</x>
+        <y>60</y>
+        <width>101</width>
+        <height>32</height>
+       </rect>
+      </property>
+      <property name="currentIndex">
+       <number>1</number>
+      </property>
+      <item>
+       <property name="text">
+        <string>0</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>1</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>2</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>3</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>4</string>
+       </property>
+      </item>
+     </widget>
+     <widget class="QLabel" name="labelSvtRows">
+      <property name="geometry">
+       <rect>
+        <x>50</x>
+        <y>140</y>
+        <width>91</width>
+        <height>31</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Max GOP:</string>
+      </property>
+     </widget>
+     <widget class="QSpinBox" name="spinBoxSvtGOP">
+      <property name="geometry">
+       <rect>
+        <x>140</x>
+        <y>140</y>
+        <width>101</width>
+        <height>32</height>
+       </rect>
+      </property>
+      <property name="minimum">
+       <number>-2</number>
+      </property>
+      <property name="maximum">
+       <number>255</number>
+      </property>
+      <property name="value">
+       <number>-2</number>
+      </property>
+     </widget>
+     <widget class="QLabel" name="labelSvtRows_3">
+      <property name="geometry">
+       <rect>
+        <x>50</x>
+        <y>180</y>
+        <width>91</width>
+        <height>31</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>AQ-Mode:</string>
+      </property>
+     </widget>
+     <widget class="QComboBox" name="comboBoxSvtAQ">
+      <property name="geometry">
+       <rect>
+        <x>140</x>
+        <y>180</y>
+        <width>101</width>
+        <height>32</height>
+       </rect>
+      </property>
+      <item>
+       <property name="text">
+        <string>0: Off</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>1: Variance base using segments</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>2: Deltaq pred efficiency</string>
+       </property>
+      </item>
      </widget>
     </widget>
    </widget>
