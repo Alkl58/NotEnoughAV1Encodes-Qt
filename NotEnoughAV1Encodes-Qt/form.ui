@@ -3140,6 +3140,35 @@
       </item>
      </widget>
     </widget>
+    <widget class="QGroupBox" name="groupBoxCustomSettings">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>280</y>
+       <width>791</width>
+       <height>121</height>
+      </rect>
+     </property>
+     <property name="title">
+      <string>Custom Settings</string>
+     </property>
+     <property name="checkable">
+      <bool>true</bool>
+     </property>
+     <property name="checked">
+      <bool>false</bool>
+     </property>
+     <widget class="QTextEdit" name="textEditCustomSettings">
+      <property name="geometry">
+       <rect>
+        <x>10</x>
+        <y>26</y>
+        <width>771</width>
+        <height>81</height>
+       </rect>
+      </property>
+     </widget>
+    </widget>
    </widget>
    <widget class="QWidget" name="tab_5">
     <attribute name="title">

@@ -125,6 +125,9 @@ class neav1e(QtWidgets.QMainWindow):
         self.checkBoxAomencDenoise.stateChanged.connect(self.toggleAomencDenoise)
         self.checkBoxRav1eContentLight.stateChanged.connect(self.toggleRav1eContentLight)
 
+        # Custom Settings
+        self.groupBoxCustomSettings.toggled.connect(self.toggleCustomSettings)
+
         # !!! CHANGE IN UI FILE !!!
         self.labelSplittingChunkLength.hide()
         self.spinBoxChunking.hide()
@@ -145,6 +148,20 @@ class neav1e(QtWidgets.QMainWindow):
         self.show()  
 
     #  ═══════════════════════════════════════ UI Logic ═══════════════════════════════════════
+
+    def toggleCustomSettings(self):
+        if self.groupBoxCustomSettings.isChecked():
+            self.groupBoxAom.setEnabled(False)
+            self.groupBoxRav1e.setEnabled(False)
+            self.groupBoxSvtav1.setEnabled(False)
+            self.setEncoderSettings()
+            self.textEditCustomSettings.setPlainText(self.encoderSettings)
+        else:
+            self.groupBoxAom.setEnabled(True)
+            self.groupBoxRav1e.setEnabled(True)
+            self.groupBoxSvtav1.setEnabled(True)
+
+
     def toggleRav1eContentLight(self):
         self.spinBoxRav1eCll.setEnabled(self.checkBoxRav1eContentLight.isChecked() == True)
         self.spinBoxRav1eFall.setEnabled(self.checkBoxRav1eContentLight.isChecked() == True)
@@ -523,7 +540,11 @@ class neav1e(QtWidgets.QMainWindow):
 
         self.setVideoFilters()
         self.setPipeColorFMT()
-        self.setEncoderSettings()
+
+        if self.groupBoxCustomSettings.isChecked():
+            self.encoderSettings = self.textEditCustomSettings.text()
+        else:
+            self.setEncoderSettings()
 
         passes = self.comboBoxPasses.currentIndex()
         currentIndex = self.comboBoxSplittingMethod.currentIndex()
