@@ -123,12 +123,15 @@ class neav1e(QtWidgets.QMainWindow):
         self.radioButtonVBR.toggled.connect(self.toggleVBRQ)
         self.checkBoxAdvancedSettings.stateChanged.connect(self.toggleAdvancedSettings)
         self.checkBoxAomencDenoise.stateChanged.connect(self.toggleAomencDenoise)
+        self.checkBoxRav1eContentLight.stateChanged.connect(self.toggleRav1eContentLight)
 
         # !!! CHANGE IN UI FILE !!!
         self.labelSplittingChunkLength.hide()
         self.spinBoxChunking.hide()
         self.checkBoxSplittingReencode.hide()
         self.comboBoxSplittingReencode.hide()
+        self.groupBoxAom.show()
+        self.groupBoxRav1e.hide()
 
         self.tabWidget.setTabEnabled(4, False)
 
@@ -141,6 +144,10 @@ class neav1e(QtWidgets.QMainWindow):
         self.show()  
 
     #  ═══════════════════════════════════════ UI Logic ═══════════════════════════════════════
+    def toggleRav1eContentLight(self):
+        self.spinBoxRav1eCll.setEnabled(self.checkBoxRav1eContentLight.isChecked() == True)
+        self.spinBoxRav1eFall.setEnabled(self.checkBoxRav1eContentLight.isChecked() == True)
+
     def toggleAomencDenoise(self):
         self.spinBoxAomencDenoise.setEnabled(self.checkBoxAomencDenoise.isChecked() == True)
 
@@ -171,6 +178,8 @@ class neav1e(QtWidgets.QMainWindow):
             self.horizontalSliderEncoderSpeed.setValue(5)
             self.horizontalSliderQ.setMaximum(63)
             self.horizontalSliderQ.setValue(28)
+            self.groupBoxAom.show()
+            self.groupBoxRav1e.hide()
         elif n == 1:
             #rav1e
             self.horizontalSliderEncoderSpeed.setMaximum(10)
@@ -178,6 +187,8 @@ class neav1e(QtWidgets.QMainWindow):
             self.horizontalSliderQ.setMaximum(255)
             self.horizontalSliderQ.setValue(100)
             self.comboBoxPasses.setCurrentIndex(0) # rav1e two pass still broken
+            self.groupBoxAom.hide()
+            self.groupBoxRav1e.show()
         elif n == 2:
             #svt-av1
             self.horizontalSliderQ.setMaximum(63)
@@ -185,6 +196,8 @@ class neav1e(QtWidgets.QMainWindow):
             self.horizontalSliderEncoderSpeed.setMaximum(8)
             self.horizontalSliderEncoderSpeed.setValue(5)
             self.comboBoxWorkerCount.setCurrentIndex(0)
+            self.groupBoxAom.hide()
+            self.groupBoxRav1e.hide()
 
     def setSummarySplitting(self):
         self.labelSummarySplitting.setText(str(self.comboBoxSplittingMethod.currentText()))
@@ -397,7 +410,7 @@ class neav1e(QtWidgets.QMainWindow):
         fmt = self.comboBoxColorFormat.currentIndex()
         passes = self.comboBoxPasses.currentIndex()
         settings = None
-        if encoder == 0: # aomenc
+        if encoder == 0: # aomenc 
             if passes == 0:
                 self.encoderPasses = " --passes=1 "
             elif passes == 1:
@@ -447,7 +460,35 @@ class neav1e(QtWidgets.QMainWindow):
                 settings += " --quantizer " + str(self.horizontalSliderQ.value())
             elif self.radioButtonVBR.isChecked() == True:
                 settings += " --bitrate " + str(self.spinBoxVBR.value())
-            settings += " --threads 4 --tile-cols 2 --tile-rows 1"
+
+            if self.checkBoxAdvancedSettings.isChecked() == False:
+                # Basic Settings
+                settings += " --threads 4 --tile-cols 1 --tile-rows 2"
+            else:
+                # Advanced Settings
+                settings += " --threads " + str(self.comboBoxRav1eThreads.currentIndex())                   # Threads
+                settings += " --tile-rows " + str(self.comboBoxRav1eTileRows.currentIndex())                # Tile Rows
+                settings += " --tile-cols " + str(self.comboBoxRav1eTileCols.currentIndex())                # Tile Columns
+                settings += " --keyint " + str(self.spinBoxRav1eGOP.value())                                # Max GOP
+                settings += " --range " + self.comboBoxRav1eRange.currentText()                             # Color Range
+                settings += " --primaries " + self.comboBoxRav1eColorPrimaries.currentText()                # Color Primaries
+                settings += " --transfer " + self.comboBoxRav1eColorTransfer.currentText()                  # Color Transfer
+                settings += " --matrix " + self.comboBoxRav1eColorMatrix.currentText()                      # Color Matrix
+                settings += " --tune " + self.comboBoxRav1eTune.currentText()                               # Tune
+                if self.checkBoxRav1eContentLight.isChecked() == True:
+                    settings += " --content-light " + str(self.spinBoxRav1eCll.value())                     # Content Light Cll
+                    settings += "," + str(self.spinBoxRav1eFall.value())                                    # Content Light Fall
+                if self.groupBoxRav1eMastering.isChecked() == True:
+                    settings += " --mastering-display G(" + str(self.spinBoxRav1eMasteringGx.value()) + "," # Mastering Gx
+                    settings += str(self.spinBoxRav1eMasteringGy.value()) + ")B("                           # Mastering Gy
+                    settings += str(self.spinBoxRav1eMasteringBx.value()) + ","                             # Mastering Bx
+                    settings += str(self.spinBoxRav1eMasteringBy.value()) + ")R("                           # Mastering By
+                    settings += str(self.spinBoxRav1eMasteringRx.value()) + ","                             # Mastering Rx
+                    settings += str(self.spinBoxRav1eMasteringRy.value()) + ")WP("                          # Mastering Ry
+                    settings += str(self.spinBoxRav1eMasteringWPx.value()) + ","                            # Mastering WPx
+                    settings += str(self.spinBoxRav1eMasteringWPy.value()) + ")L("                          # Mastering WPy
+                    settings += str(self.spinBoxRav1eMasteringLx.value()) + ","                             # Mastering Lx
+                    settings += str(self.spinBoxRav1eMasteringLy.value()) + ")"                             # Mastering Ly
         elif encoder == 2: # svt-av1
             if passes == 0:
                 self.encoderPasses = " --passes 1 "

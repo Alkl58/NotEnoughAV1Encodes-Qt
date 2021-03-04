@@ -14,12 +14,13 @@ For Windows users check out the non Qt version: ![NotEnoughAV1Encodes](https://g
 - [X] Basic rav1e encoding
 - [X] Basic svt-av1 encoding
 - [X] Advanced aomenc settings
-- [ ] Advanced rav1e settings
+- [X] Advanced rav1e settings
 - [ ] Advanced svt-av1 settings
 - [ ] Save & Load Custom Presets
 - [ ] Basic Audio Encoding
 - [ ] Advanced Audio Encoding
 - [ ] (Basic Subtitle Support)
+- [ ] Better Progress Handling
 - [ ] Batch Encoding
 - [ ] Cancel Process
 - [ ] Resume Process
