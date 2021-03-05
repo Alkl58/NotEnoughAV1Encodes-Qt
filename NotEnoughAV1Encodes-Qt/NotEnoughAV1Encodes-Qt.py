@@ -9,83 +9,36 @@ from functools import partial
 from subprocess import call
 from os import path
 from pathlib import Path
+from shutil import which
 import os
 import sys
 import time
 import subprocess
 import asyncio
 import platform
-import psutil 
+import psutil
 import json
 import math
 
-class Worker(QObject):
-    finished = pyqtSignal()
-    progress = pyqtSignal(int)
-    @pyqtSlot()
-    def run(self, poolSize, queueFirst, queueSecond):
-        pool = Pool(poolSize)  # Sets the amount of workers
-        for i, returncode in enumerate(pool.imap(partial(call, shell=True), queueFirst)):  # Multi Threaded Encoding
-            self.progress.emit(i + 1)
-        for i, returncode in enumerate(pool.imap(partial(call, shell=True), queueSecond)):  # Multi Threaded Encoding
-            self.progress.emit(i + 1)
-        self.finished.emit()
-
-class WorkerSplitting(QObject):
-    finished = pyqtSignal()
-    @pyqtSlot()
-    def run(self, videoInput, videoCodec, segTime, splittingOutput):
-        subprocess.call(['ffmpeg', '-y','-i', videoInput, '-map_metadata', '-1', '-c:v'] + videoCodec + ['-f', 'segment', '-segment_time', segTime, splittingOutput])
-        self.finished.emit()
-
-class WorkerScene(QObject):
-    finished = pyqtSignal()
-    @pyqtSlot()
-    def run(self, videoInput, threshold, splittingOutput):
-
-        cmd="ffmpeg -i " + '\u0022' + videoInput + '\u0022' + " -hide_banner -loglevel 32 -filter_complex select=" + '\u0022' + "gt(scene\\," + threshold + "),select=eq(key\\,1),showinfo" + '\u0022' + " -an -f null -"
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,universal_newlines=True, shell=True)
-
-        temp = []
-        for line in process.stdout:
-            if "pts_time:" in line:
-                temp.append(line)
-
-        joined = ''.join(temp).split()
-        scenes = []
-        for value in joined:
-            if "pts_time:" in value:
-                scenes.append(value[9:])
-
-        # Delete splits.txt file to avoid conflicts from previous attempts
-        if os.path.exists(splittingOutput):
-            os.remove(splittingOutput)
-
-        # Create / Open split.txt file
-        f = open(splittingOutput, "a")
-
-        # FFmpeg Args
-        previousScene = "0.000"
-        for timeStamp in scenes:
-            f.write("-ss " + previousScene + " -to  " + timeStamp + "\n")
-            previousScene = timeStamp
-        # Add last seeking argument
-        f.write("-ss " + previousScene)
-        f.close()
-        self.finished.emit()
+import worker
+import worker_splitting
+import worker_scene
+import worker_audio
 
 class neav1e(QtWidgets.QMainWindow):
 
     videoInput = None
     videoOutput = None
 
-    videoQueueFirstPass = []
-    videoQueueSecondPass = []
+    audio_encoding = False
+
+    video_queue_first_pass = []
+    video_queue_second_pass = []
 
     encoderSettings = None
     encoderOutput = None
     encoderOutputStats = None
-    encoderPasses = None
+    encoder_passes = None
     encoderPassOne = None
     encoderPassTwo = None
     pipeColorFMT = None
@@ -93,6 +46,22 @@ class neav1e(QtWidgets.QMainWindow):
 
     tempDir = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".temp")
     tempDirFileName = None
+    recommended_worker_count = None
+
+    # FFmpeg expects ISO 639-2 codes for languages https://en.wikipedia.org/wiki/List_of_ISO_639-2_codes
+    # ComboBoxes will be filled with this dictionary
+    audioLanguageDictionary = {
+        "English":      "eng", "Bosnian":       "bos", "Bulgarian":     "bul", "Chinese":       "chi",
+        "Czech":        "cze", "Greek":         "gre", "Estonian":      "est", "Persian":       "per",
+        "Filipino":     "fil", "Finnish":       "fin", "French":        "fre", "Georgian":      "geo",
+        "German":       "ger", "Croatian":      "hrv", "Hungarian":     "hun", "Indonesian":    "ind",
+        "Icelandic":    "ice", "Italian":       "ita", "Japanese":      "jpn", "Korean":        "kor",
+        "Latin":        "lat", "Latvian":       "lav", "Lithuanian":    "lit", "Dutch":         "nld",
+        "Norwegian":    "nob", "Polish":        "pol", "Portuguese":    "por", "Russian":       "rus",
+        "Slovak":       "slk", "Slovenian":     "slv", "Spanish":       "spa", "Serbian":       "srp",
+        "Swedish":      "swe", "Thai":          "tha", "Turkish":       "tur", "Ukrainian":     "ukr",
+        "Vietnamese":   "vie"
+        }
 
     def __init__(self):
         super(neav1e, self).__init__()
@@ -108,6 +77,7 @@ class neav1e(QtWidgets.QMainWindow):
 
         # Controls Start / Stop
         self.pushButtonStart.clicked.connect(self.mainEntry)
+        # self.pushButtonCancel.clicked.connect(self.encode_audio)
 
         # Controls Splitting
         self.comboBoxSplittingMethod.currentIndexChanged.connect(self.splittingUI)
@@ -143,12 +113,145 @@ class neav1e(QtWidgets.QMainWindow):
         for i in range(1, psutil.cpu_count(logical = False) + 1):
             self.comboBoxWorkerCount.addItem(str(i))
         self.comboBoxWorkerCount.setCurrentIndex(int((psutil.cpu_count(logical = False) - 1) * 0.75))
+        self.recommended_worker_count = int((psutil.cpu_count(logical = False) - 1) * 0.75)
+
+        self.fillAudioLanguage()
+
+        # Check if FFmpeg is in Path
+        if which("ffmpeg") is None:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText("FFmpeg not found in PATH!")
+            msg.setWindowTitle("Error")
+            msg.exec()
+            # Exit Program
+            sys.exit()
 
         # Show the GUI
-        self.show()  
+        self.show()
+
+    #  ═════════════════════════════════════════ Audio ════════════════════════════════════════
+
+    def encode_audio(self):
+        command = ""
+        if self.groupBoxTrackOne.isChecked():
+            command += self.audioCMDGenerator("0", self.comboBoxTrackOneCodec.currentText(), str(self.spinBoxTrackOneBitrate.value()), self.switchAudioChannelLayout(str(self.comboBoxTrackOneLayout.currentIndex())), self.switchAudioLanguage(self.comboBoxTrackOneLanguage.currentText()))
+        if self.groupBoxTrackTwo.isChecked():
+            command += self.audioCMDGenerator("1", self.comboBoxTrackTwoCodec.currentText(), str(self.spinBoxTrackTwoBitrate.value()), self.switchAudioChannelLayout(str(self.comboBoxTrackTwoLayout.currentIndex())), self.switchAudioLanguage(self.comboBoxTrackTwoLanguage.currentText()))
+        if self.groupBoxTrackThree.isChecked():
+            command += self.audioCMDGenerator("2", self.comboBoxTrackThreeCodec.currentText(), str(self.spinBoxTrackThreeBitrate.value()), self.switchAudioChannelLayout(str(self.comboBoxTrackThreeLayout.currentIndex())), self.switchAudioLanguage(self.comboBoxTrackThreeLanguage.currentText()))
+        if self.groupBoxTrackThree.isChecked():
+            command += self.audioCMDGenerator("3", self.comboBoxTrackFourCodec.currentText(), str(self.spinBoxTrackFourBitrate.value()), self.switchAudioChannelLayout(str(self.comboBoxTrackFourLayout.currentIndex())), self.switchAudioLanguage(self.comboBoxTrackFourLanguage.currentText()))
+        command += " -af aformat=channel_layouts=" + '\u0022' + "7.1|5.1|stereo|mono" + '\u0022'
+
+        if self.groupBoxTrackOne.isChecked() or self.groupBoxTrackTwo.isChecked() or self.groupBoxTrackThree.isChecked() or self.groupBoxTrackThree.isChecked():
+            out_path = Path(os.path.join(self.tempDir, self.tempDirFileName, "Audio"))
+            out_path.mkdir(parents=True, exist_ok=True)
+            audio_output = os.path.join(self.tempDir, self.tempDirFileName, "Audio", "audio.mkv")
+            self.audio_encoding = True
+            # Create a QThread object
+            self.thread_encode_audio = QThread()
+            # Create a worker object
+            self.worker_encode_audio = worker_audio.WorkerAudio()
+            # Move worker to the thread
+            self.worker_encode_audio.moveToThread(self.thread_encode_audio)
+            # Connect signals and slots
+            self.thread_encode_audio.started.connect(partial(self.worker_encode_audio.run, self.videoInput, command, audio_output))
+            self.worker_encode_audio.finished.connect(self.thread_encode_audio.quit)
+            self.worker_encode_audio.finished.connect(self.splitting)
+            self.worker_encode_audio.finished.connect(self.worker_encode_audio.deleteLater)
+            self.thread_encode_audio.finished.connect(self.thread_encode_audio.deleteLater)
+            # Start the thread
+            self.thread_encode_audio.start()
+        else:
+            self.audio_encoding = False
+            self.splitting()
+
+    def audioCMDGenerator(self, activetrackindex, audioCodec, activetrackbitrate, channellayout, lang):
+        # Audio Mapping
+        audio = '-map 0:a:' + activetrackindex + ' -c:a:' + activetrackindex
+        # Codec
+        audio += self.switchAudioCodec(audioCodec)
+        # Channel Layout / Bitrate
+        audio += ' -b:a:' + activetrackindex + ' ' + activetrackbitrate + 'k'
+        audio += ' -ac:a:' + activetrackindex + ' ' + channellayout
+        # Metadata
+        audio += ' -metadata:s:a:' + activetrackindex + ' language=' + lang
+        audio += ' -metadata:s:a:' + activetrackindex + ' title=' + '\u0022' + '[' + lang.upper() + '] ' + audioCodec + ' ' + activetrackbitrate + 'kbps' + '\u0022'
+        return audio
+
+    def switchAudioLanguage(self, lang):
+        return self.audioLanguageDictionary[lang]
+
+    def switchAudioCodec(self, codec):
+        value = ""
+        if codec == "Opus":
+            value = ' libopus'
+        elif codec == "AC3":
+            value = ' ac3'
+        elif codec == "AAC":
+            value = ' aac'
+        elif codec == "MP3":
+            value = ' libmp3lame'
+        return value
+
+    def switchAudioChannelLayout(self, layout):
+        value = ""
+        if layout == "0":
+            value = '1'
+        elif layout == "1":
+            value = '2'
+        elif layout == "3":
+            value = '6'
+        elif layout == "4":
+            value = '8'
+        return value
+
+    def ffprobeAudioDetect(self):
+        cmd="ffprobe -i " + '\u0022' + self.videoInput + '\u0022' + "  -loglevel error -select_streams a -show_entries stream=index -of csv=p=1"
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,universal_newlines=True, shell=True)
+
+        temp = []
+        for line in process.stdout:
+            temp.append(line)
+        joined = ''.join(temp).split()
+        
+        counter = 0
+        trackOne = trackTwo = trackThree = trackFour = False
+        for _ in joined:
+            if counter == 0:
+                trackOne = True
+            if counter == 1:
+                trackTwo = True
+            if counter == 2:
+                trackThree = True
+            if counter == 3:
+                trackFour = True
+            counter += 1
+
+        self.groupBoxTrackOne.setEnabled(trackOne)
+        self.groupBoxTrackOne.setChecked(trackOne)
+        self.groupBoxTrackTwo.setEnabled(trackTwo)
+        self.groupBoxTrackTwo.setChecked(trackTwo)
+        self.groupBoxTrackThree.setEnabled(trackThree)
+        self.groupBoxTrackThree.setChecked(trackThree)
+        self.groupBoxTrackFour.setEnabled(trackFour)
+        self.groupBoxTrackFour.setChecked(trackFour)
 
     #  ═══════════════════════════════════════ UI Logic ═══════════════════════════════════════
 
+    def fillAudioLanguage(self):
+        # Clears Audio Language ComboBox & fills it with the dictionary
+        self.comboBoxTrackOneLanguage.clear()
+        self.comboBoxTrackTwoLanguage.clear()
+        self.comboBoxTrackThreeLanguage.clear()
+        self.comboBoxTrackFourLanguage.clear()
+        for i in self.audioLanguageDictionary:
+            self.comboBoxTrackOneLanguage.addItem(i)
+            self.comboBoxTrackTwoLanguage.addItem(i)
+            self.comboBoxTrackThreeLanguage.addItem(i)
+            self.comboBoxTrackFourLanguage.addItem(i)
+        
     def toggleCustomSettings(self):
         if self.groupBoxCustomSettings.isChecked():
             self.groupBoxAom.setEnabled(False)
@@ -161,16 +264,15 @@ class neav1e(QtWidgets.QMainWindow):
             self.groupBoxRav1e.setEnabled(True)
             self.groupBoxSvtav1.setEnabled(True)
 
-
     def toggleRav1eContentLight(self):
-        self.spinBoxRav1eCll.setEnabled(self.checkBoxRav1eContentLight.isChecked() == True)
-        self.spinBoxRav1eFall.setEnabled(self.checkBoxRav1eContentLight.isChecked() == True)
+        self.spinBoxRav1eCll.setEnabled(self.checkBoxRav1eContentLight.isChecked() is True)
+        self.spinBoxRav1eFall.setEnabled(self.checkBoxRav1eContentLight.isChecked() is True)
 
     def toggleAomencDenoise(self):
-        self.spinBoxAomencDenoise.setEnabled(self.checkBoxAomencDenoise.isChecked() == True)
+        self.spinBoxAomencDenoise.setEnabled(self.checkBoxAomencDenoise.isChecked() is True)
 
     def toggleAdvancedSettings(self):
-        self.tabWidget.setTabEnabled(4, self.checkBoxAdvancedSettings.isChecked() == True)
+        self.tabWidget.setTabEnabled(4, self.checkBoxAdvancedSettings.isChecked() is True)
 
     def toggleVBRQ(self, a):
         if a:
@@ -196,6 +298,7 @@ class neav1e(QtWidgets.QMainWindow):
             self.horizontalSliderEncoderSpeed.setValue(5)
             self.horizontalSliderQ.setMaximum(63)
             self.horizontalSliderQ.setValue(28)
+            self.comboBoxWorkerCount.setCurrentIndex(self.recommended_worker_count)
             self.groupBoxAom.show()
             self.groupBoxRav1e.hide()
             self.groupBoxSvtav1.hide()
@@ -205,6 +308,7 @@ class neav1e(QtWidgets.QMainWindow):
             self.horizontalSliderEncoderSpeed.setValue(6)
             self.horizontalSliderQ.setMaximum(255)
             self.horizontalSliderQ.setValue(100)
+            self.comboBoxWorkerCount.setCurrentIndex(self.recommended_worker_count)
             self.comboBoxPasses.setCurrentIndex(0) # rav1e two pass still broken
             self.groupBoxAom.hide()
             self.groupBoxRav1e.show()
@@ -233,7 +337,7 @@ class neav1e(QtWidgets.QMainWindow):
         self.labelSpeed.setText(str(self.horizontalSliderEncoderSpeed.value()))
 
     def splittingReencode(self):
-        if self.checkBoxSplittingReencode.isChecked() == True:
+        if self.checkBoxSplittingReencode.isChecked() is True:
             self.comboBoxSplittingReencode.setEnabled(True)
         else:
             self.comboBoxSplittingReencode.setEnabled(False)
@@ -257,9 +361,11 @@ class neav1e(QtWidgets.QMainWindow):
 
     def openVideoSource(self):
         fname, _ = QFileDialog.getOpenFileName(self, 'Select Video File', '',"Video files (*.mp4 *.mkv *.flv *.mov)")
-        self.labelVideoSource.setText(fname)
-        self.videoInput = fname
-        self.tempDirFileName = os.path.splitext(os.path.basename(fname))[0]
+        if fname:
+            self.labelVideoSource.setText(fname)
+            self.videoInput = fname
+            self.tempDirFileName = os.path.splitext(os.path.basename(fname))[0]
+            self.ffprobeAudioDetect()
 
     def setVideoDestination(self):
         fname, _ = QFileDialog.getSaveFileName(self, 'Select Video Output', '',"Video files (*.webm *.mp4 *.mkv)")
@@ -269,39 +375,39 @@ class neav1e(QtWidgets.QMainWindow):
     #  ════════════════════════════════════════ Filters ═══════════════════════════════════════
 
     def setVideoFilters(self):
-        crop = self.groupBoxCrop.isChecked() == True
-        resize = self.groupBoxResize.isChecked() == True
-        deinterlace = self.groupBoxDeinterlace.isChecked() == True
-        rotate = self.groupBoxRotate.isChecked() == True
-        tempCounter = 0
-        filterCommand = ""
+        crop = self.groupBoxCrop.isChecked() is True
+        resize = self.groupBoxResize.isChecked() is True
+        deinterlace = self.groupBoxDeinterlace.isChecked() is True
+        rotate = self.groupBoxRotate.isChecked() is True
+        counter = 0
+        filter_command = ""
 
         if crop or resize or deinterlace or rotate:
-            filterCommand = " -vf "
+            filter_command = " -vf "
             if crop:
-                filterCommand += self.VideoCrop()
-                tempCounter += 1
+                filter_command += self.VideoCrop()
+                counter += 1
             if deinterlace:
-                if tempCounter != 0:
-                    filterCommand += ","
-                filterCommand += self.VideoDeinterlace()
-                tempCounter += 1
+                if counter != 0:
+                    filter_command += ","
+                filter_command += self.VideoDeinterlace()
+                counter += 1
             if rotate:
-                if tempCounter != 0:
-                    filterCommand += ","
-                filterCommand += self.VideoRotate()
-                tempCounter += 1
+                if counter != 0:
+                    filter_command += ","
+                filter_command += self.VideoRotate()
+                counter += 1
             if resize:
-                if tempCounter != 0:
-                     filterCommand += ","
-                filterCommand += self.VideoResize() # !!! Has to be last, else ffmpeg logic fails
-        self.filterCommand = filterCommand
+                if counter != 0:
+                    filter_command += ","
+                filter_command += self.VideoResize() # !!! Has to be last, else ffmpeg logic fails
+        self.filterCommand = filter_command
 
     def VideoCrop(self):
-        if self.groupBoxCrop.isChecked() == True:
-            widthNew = str(self.spinBoxFilterCropRight.value() + self.spinBoxFilterCropLeft.value())
-            heightNew = str(self.spinBoxFilterCropTop.value() + self.spinBoxFilterCropBottom.value())
-            return "crop=iw-" + widthNew + ":ih-" + heightNew + ":" + str(self.spinBoxCropLeft.value()) + ":" + str(self.spinBoxCropTop.value())
+        if self.groupBoxCrop.isChecked() is True:
+            width_new = str(self.spinBoxFilterCropRight.value() + self.spinBoxFilterCropLeft.value())
+            height_new = str(self.spinBoxFilterCropTop.value() + self.spinBoxFilterCropBottom.value())
+            return "crop=iw-" + width_new + ":ih-" + height_new + ":" + str(self.spinBoxCropLeft.value()) + ":" + str(self.spinBoxCropTop.value())
         else:
             return None  # Needs to be set, else it will crop if in the same instance it was active
 
@@ -332,15 +438,15 @@ class neav1e(QtWidgets.QMainWindow):
     
     def splitting(self):
         # Create Temp Folder if not existant
-        path = Path(os.path.join(self.tempDir, self.tempDirFileName, "Chunks"))
-        path.mkdir(parents=True, exist_ok=True)
+        out_path = Path(os.path.join(self.tempDir, self.tempDirFileName, "Chunks"))
+        out_path.mkdir(parents=True, exist_ok=True)
         # Select the correct splitting method
-        currentIndex = self.comboBoxSplittingMethod.currentIndex()
-        if currentIndex == 0:
+        current_index = self.comboBoxSplittingMethod.currentIndex()
+        if current_index == 0:
             # FFmpeg Scene Detect
             self.labelStatus.setText("Status: Detecting Scenes")
             self.ffmpegSceneDetect()
-        elif currentIndex == 1:
+        elif current_index == 1:
             # Equal Chunking
             self.labelStatus.setText("Status: Splitting")
             self.ffmpegChunking()
@@ -361,19 +467,19 @@ class neav1e(QtWidgets.QMainWindow):
         splittingOutput = os.path.join(self.tempDir, self.tempDirFileName, "Chunks", "split%6d.mkv")
 
         # Create a QThread object
-        self.threadSplitting = QThread()
+        self.thread_split = QThread()
         # Create a worker object
-        self.workerSplitting = WorkerSplitting()
+        self.worker_split = worker_splitting.WorkerSplitting()
         # Move worker to the thread
-        self.workerSplitting.moveToThread(self.threadSplitting)
+        self.worker_split.moveToThread(self.thread_split)
         # Connect signals and slots
-        self.threadSplitting.started.connect(partial(self.workerSplitting.run, self.videoInput, videoCodec, segTime, splittingOutput))
-        self.workerSplitting.finished.connect(self.threadSplitting.quit)
-        self.workerSplitting.finished.connect(self.ffmpegSplittingFinished)
-        self.workerSplitting.finished.connect(self.workerSplitting.deleteLater)
-        self.threadSplitting.finished.connect(self.threadSplitting.deleteLater)
+        self.thread_split.started.connect(partial(self.worker_split.run, self.videoInput, videoCodec, segTime, splittingOutput))
+        self.worker_split.finished.connect(self.thread_split.quit)
+        self.worker_split.finished.connect(self.ffmpegSplittingFinished)
+        self.worker_split.finished.connect(self.worker_split.deleteLater)
+        self.thread_split.finished.connect(self.thread_split.deleteLater)
         # Start the thread
-        self.threadSplitting.start()
+        self.thread_split.start()
 
     def ffmpegSplittingFinished(self):
         self.setQueue()
@@ -383,27 +489,27 @@ class neav1e(QtWidgets.QMainWindow):
         threshold = str(self.doubleSpinBoxFFmpegSceneThreshold.value())
         splittingOutput = os.path.join(self.tempDir, self.tempDirFileName, "splits.txt")
         # Create a QThread object
-        self.threadScene = QThread()
+        self.thread_scene_detect = QThread()
         # Create a worker object
-        self.workerScene = WorkerScene()
+        self.worker_scene_detect = worker_scene.WorkerScene()
         # Move worker to the thread
-        self.workerScene.moveToThread(self.threadScene)
+        self.worker_scene_detect.moveToThread(self.thread_scene_detect)
         # Connect signals and slots
-        self.threadScene.started.connect(partial(self.workerScene.run, self.videoInput, threshold, splittingOutput))
-        self.workerScene.finished.connect(self.threadScene.quit)
-        self.workerScene.finished.connect(self.ffmpegSplittingFinished)
-        self.workerScene.finished.connect(self.workerScene.deleteLater)
-        self.threadScene.finished.connect(self.threadScene.deleteLater)
+        self.thread_scene_detect.started.connect(partial(self.worker_scene_detect.run, self.videoInput, threshold, splittingOutput))
+        self.worker_scene_detect.finished.connect(self.thread_scene_detect.quit)
+        self.worker_scene_detect.finished.connect(self.ffmpegSplittingFinished)
+        self.worker_scene_detect.finished.connect(self.worker_scene_detect.deleteLater)
+        self.thread_scene_detect.finished.connect(self.worker_scene_detect.deleteLater)
         # Start the thread
-        self.threadScene.start()
+        self.thread_scene_detect.start()
 
     #  ═════════════════════════════════════════ Main ═════════════════════════════════════════
     def mainEntry(self):
         # Check if input and output is set
         if self.videoInput and self.videoOutput:
             self.progressBar.setValue(0)
-            # Splitting
-            self.splitting()
+            # Audio Encoding
+            self.encode_audio()
         else:
             print("Not Implemented")
 
@@ -433,9 +539,9 @@ class neav1e(QtWidgets.QMainWindow):
         settings = None
         if encoder == 0: # aomenc 
             if passes == 0:
-                self.encoderPasses = " --passes=1 "
+                self.encoder_passes = " --passes=1 "
             elif passes == 1:
-                self.encoderPasses = " --passes=2 "
+                self.encoder_passes = " --passes=2 "
                 self.encoderPassOne = " --pass=1 "
                 self.encoderPassTwo = " --pass=2 "
 
@@ -470,12 +576,12 @@ class neav1e(QtWidgets.QMainWindow):
                 settings += " --aq-mode=" + str(self.comboBoxAomencAQMode.currentIndex())                   # AQ Mode
                 settings += " --color-primaries=" + self.comboBoxAomencColorPrimaries.currentText()         # Color Primaries
                 settings += " --transfer-characteristics=" + self.comboBoxAomencColorTransfer.currentText() # Color Transfer
-                settings += " --matrix-coefficients=" + self.comboBoxAomencColorMatrix.currentText()        # Color Matrix 
+                settings += " --matrix-coefficients=" + self.comboBoxAomencColorMatrix.currentText()        # Color Matrix
                 if self.checkBoxAomencDenoise.isChecked() == True:
-                    settings += " --denoise-noise-level=" + str(self.spinBoxAomencDenoise.value())          # Denoise Noise Level 
+                    settings += " --denoise-noise-level=" + str(self.spinBoxAomencDenoise.value())          # Denoise Noise Level
         elif encoder == 1: # rav1e
             self.encoderOutput = " --output "
-            self.encoderPasses = " " # rav1e still does not support 2pass encoding
+            self.encoder_passes = " " # rav1e still does not support 2pass encoding
             settings = "rav1e - --speed " + str(self.horizontalSliderEncoderSpeed.value())
             if self.radioButtonCQ.isChecked() == True:
                 settings += " --quantizer " + str(self.horizontalSliderQ.value())
@@ -512,9 +618,9 @@ class neav1e(QtWidgets.QMainWindow):
                     settings += str(self.spinBoxRav1eMasteringLy.value()) + ")"                             # Mastering Ly
         elif encoder == 2: # svt-av1
             if passes == 0:
-                self.encoderPasses = " --passes 1 "
+                self.encoder_passes = " --passes 1 "
             elif passes == 1:
-                self.encoderPasses = " --irefresh-type 2 --passes 2 "
+                self.encoder_passes = " --irefresh-type 2 --passes 2 "
                 self.encoderPassOne = " --pass 1 "
                 self.encoderPassTwo = " --pass 2 "
             self.encoderOutput = " -b "
@@ -523,20 +629,17 @@ class neav1e(QtWidgets.QMainWindow):
                 settings += " --rc 0 -q " + str(self.horizontalSliderQ.value())
             elif self.radioButtonVBR.isChecked() == True:
                 settings += " --rc 1 --tbr " + str(self.spinBoxVBR.value())
-            
             if self.checkBoxRav1eContentLight.isChecked() == False:
                 settings += " --tile-columns " + str(self.comboBoxSvtTileCols.currentIndex())
                 settings += " --tile-rows " + str(self.comboBoxSvtTileRows.currentIndex())
                 settings += " --keyint " + str(self.spinBoxSvtGOP.value())
                 settings += " --adaptive-quantization " + str(self.comboBoxSvtAQ.currentIndex())
-        
         self.encoderSettings = settings
-
 
     def setQueue(self):
         # Clear Queue
-        self.videoQueueFirstPass = []
-        self.videoQueueSecondPass = []
+        self.video_queue_first_pass = []
+        self.video_queue_second_pass = []
 
         self.setVideoFilters()
         self.setPipeColorFMT()
@@ -560,17 +663,17 @@ class neav1e(QtWidgets.QMainWindow):
                     tempOutputFile = '\u0022' + os.path.join(self.tempDir, self.tempDirFileName, "Chunks", "split" + outFileName + ".ivf") + '\u0022'
                     if passes == 0:
                         if encoder == 2: # svt-av1 specific
-                            self.videoQueueFirstPass.append("ffmpeg -i " + tempInputFile + " " + seekPoint.rstrip() + " -pix_fmt " + self.pipeColorFMT + " " + self.filterCommand + " -color_range 0 -vsync 0 -nostdin -f yuv4mpegpipe - | " + self.encoderSettings + self.encoderPasses + self.encoderOutput + tempOutputFile)
+                            self.video_queue_first_pass.append("ffmpeg -i " + tempInputFile + " " + seekPoint.rstrip() + " -pix_fmt " + self.pipeColorFMT + " " + self.filterCommand + " -color_range 0 -vsync 0 -nostdin -f yuv4mpegpipe - | " + self.encoderSettings + self.encoder_passes + self.encoderOutput + tempOutputFile)
                         else:
-                            self.videoQueueFirstPass.append("ffmpeg -i " + tempInputFile + " " + seekPoint.rstrip() + " -pix_fmt " + self.pipeColorFMT + " " + self.filterCommand + " -color_range 0 -vsync 0 -f yuv4mpegpipe - | " + self.encoderSettings + self.encoderPasses + self.encoderOutput + tempOutputFile)
+                            self.video_queue_first_pass.append("ffmpeg -i " + tempInputFile + " " + seekPoint.rstrip() + " -pix_fmt " + self.pipeColorFMT + " " + self.filterCommand + " -color_range 0 -vsync 0 -f yuv4mpegpipe - | " + self.encoderSettings + self.encoder_passes + self.encoderOutput + tempOutputFile)
                     elif passes == 1:
                         tempOutputFileLog = '\u0022' + os.path.join(self.tempDir, self.tempDirFileName, "Chunks", "split" + outFileName + ".stats") + '\u0022'
                         if encoder == 2: # svt-av1 specific
-                            self.videoQueueFirstPass.append("ffmpeg -i " + tempInputFile + " " + seekPoint.rstrip() + " -pix_fmt " + self.pipeColorFMT + " " + self.filterCommand + " -color_range 0 -vsync 0 -nostdin -f yuv4mpegpipe - | " + self.encoderSettings + self.encoderPasses + self.encoderPassOne + self.encoderOutput + "/dev/null " + self.encoderOutputStats + tempOutputFileLog)
-                            self.videoQueueSecondPass.append("ffmpeg -i " + tempInputFile + " " + seekPoint.rstrip() + " -pix_fmt " + self.pipeColorFMT + " " + self.filterCommand + " -color_range 0 -vsync 0 -nostdin -f yuv4mpegpipe - | " + self.encoderSettings + self.encoderPasses + self.encoderPassTwo + self.encoderOutput + tempOutputFile + self.encoderOutputStats + tempOutputFileLog)
+                            self.video_queue_first_pass.append("ffmpeg -i " + tempInputFile + " " + seekPoint.rstrip() + " -pix_fmt " + self.pipeColorFMT + " " + self.filterCommand + " -color_range 0 -vsync 0 -nostdin -f yuv4mpegpipe - | " + self.encoderSettings + self.encoder_passes + self.encoderPassOne + self.encoderOutput + "/dev/null " + self.encoderOutputStats + tempOutputFileLog)
+                            self.video_queue_second_pass.append("ffmpeg -i " + tempInputFile + " " + seekPoint.rstrip() + " -pix_fmt " + self.pipeColorFMT + " " + self.filterCommand + " -color_range 0 -vsync 0 -nostdin -f yuv4mpegpipe - | " + self.encoderSettings + self.encoder_passes + self.encoderPassTwo + self.encoderOutput + tempOutputFile + self.encoderOutputStats + tempOutputFileLog)
                         else:
-                            self.videoQueueFirstPass.append("ffmpeg -i " + tempInputFile + " " + seekPoint.rstrip() + " -pix_fmt " + self.pipeColorFMT + " " + self.filterCommand + " -color_range 0 -vsync 0 -f yuv4mpegpipe - | " + self.encoderSettings + self.encoderPasses + self.encoderPassOne + self.encoderOutput + "/dev/null " + self.encoderOutputStats + tempOutputFileLog)
-                            self.videoQueueSecondPass.append("ffmpeg -i " + tempInputFile + " " + seekPoint.rstrip() + " -pix_fmt " + self.pipeColorFMT + " " + self.filterCommand + " -color_range 0 -vsync 0 -f yuv4mpegpipe - | " + self.encoderSettings + self.encoderPasses + self.encoderPassTwo + self.encoderOutput + tempOutputFile + self.encoderOutputStats + tempOutputFileLog)
+                            self.video_queue_first_pass.append("ffmpeg -i " + tempInputFile + " " + seekPoint.rstrip() + " -pix_fmt " + self.pipeColorFMT + " " + self.filterCommand + " -color_range 0 -vsync 0 -f yuv4mpegpipe - | " + self.encoderSettings + self.encoder_passes + self.encoderPassOne + self.encoderOutput + "/dev/null " + self.encoderOutputStats + tempOutputFileLog)
+                            self.video_queue_second_pass.append("ffmpeg -i " + tempInputFile + " " + seekPoint.rstrip() + " -pix_fmt " + self.pipeColorFMT + " " + self.filterCommand + " -color_range 0 -vsync 0 -f yuv4mpegpipe - | " + self.encoderSettings + self.encoder_passes + self.encoderPassTwo + self.encoderOutput + tempOutputFile + self.encoderOutputStats + tempOutputFileLog)
                     counter += 1
         elif currentIndex == 1:
             # Equal Chunking
@@ -582,32 +685,32 @@ class neav1e(QtWidgets.QMainWindow):
                     tempOutputFile = '\u0022' + os.path.join(self.tempDir, self.tempDirFileName, "Chunks", os.path.splitext(os.path.basename(str(file)))[0] + ".ivf") + '\u0022'
                     if passes == 0:
                         if encoder == 2: # svt-av1 specific
-                            self.videoQueueFirstPass.append("ffmpeg -i " + tempInputFile + " -pix_fmt " + self.pipeColorFMT + " -color_range 0 -vsync 0 -nostdin -f yuv4mpegpipe - | " + self.encoderSettings + self.encoderPasses + self.encoderOutput + tempOutputFile)
+                            self.video_queue_first_pass.append("ffmpeg -i " + tempInputFile + " -pix_fmt " + self.pipeColorFMT + " -color_range 0 -vsync 0 -nostdin -f yuv4mpegpipe - | " + self.encoderSettings + self.encoder_passes + self.encoderOutput + tempOutputFile)
                         else:
-                            self.videoQueueFirstPass.append("ffmpeg -i " + tempInputFile + " -pix_fmt " + self.pipeColorFMT + " -color_range 0 -vsync 0 -f yuv4mpegpipe - | " + self.encoderSettings + self.encoderPasses + self.encoderOutput + tempOutputFile)
+                            self.video_queue_first_pass.append("ffmpeg -i " + tempInputFile + " -pix_fmt " + self.pipeColorFMT + " -color_range 0 -vsync 0 -f yuv4mpegpipe - | " + self.encoderSettings + self.encoder_passes + self.encoderOutput + tempOutputFile)
                     elif passes == 1:
                         tempOutputFileLog = '\u0022' + os.path.join(self.tempDir, self.tempDirFileName, "Chunks", os.path.splitext(os.path.basename(str(file)))[0] + ".stats") + '\u0022'
                         if encoder == 2: # svt-av1 specific
-                            self.videoQueueFirstPass.append("ffmpeg -i " + tempInputFile + " -pix_fmt " + self.pipeColorFMT + " -color_range 0 -vsync 0 -nostdin -f yuv4mpegpipe - | " + self.encoderSettings + self.encoderPasses + self.encoderPassOne + self.encoderOutput + "/dev/null " + self.encoderOutputStats + tempOutputFileLog)
-                            self.videoQueueSecondPass.append("ffmpeg -i " + tempInputFile + " -pix_fmt " + self.pipeColorFMT + " -color_range 0 -vsync 0 -nostdin -f yuv4mpegpipe - | " + self.encoderSettings + self.encoderPasses + self.encoderPassTwo + self.encoderOutput + tempOutputFile + self.encoderOutputStats + tempOutputFileLog)
+                            self.video_queue_first_pass.append("ffmpeg -i " + tempInputFile + " -pix_fmt " + self.pipeColorFMT + " -color_range 0 -vsync 0 -nostdin -f yuv4mpegpipe - | " + self.encoderSettings + self.encoder_passes + self.encoderPassOne + self.encoderOutput + "/dev/null " + self.encoderOutputStats + tempOutputFileLog)
+                            self.video_queue_second_pass.append("ffmpeg -i " + tempInputFile + " -pix_fmt " + self.pipeColorFMT + " -color_range 0 -vsync 0 -nostdin -f yuv4mpegpipe - | " + self.encoderSettings + self.encoder_passes + self.encoderPassTwo + self.encoderOutput + tempOutputFile + self.encoderOutputStats + tempOutputFileLog)
                         else:
-                            self.videoQueueFirstPass.append("ffmpeg -i " + tempInputFile + " -pix_fmt " + self.pipeColorFMT + " -color_range 0 -vsync 0 -f yuv4mpegpipe - | " + self.encoderSettings + self.encoderPasses + self.encoderPassOne + self.encoderOutput + "/dev/null " + self.encoderOutputStats + tempOutputFileLog)
-                            self.videoQueueSecondPass.append("ffmpeg -i " + tempInputFile + " -pix_fmt " + self.pipeColorFMT + " -color_range 0 -vsync 0 -f yuv4mpegpipe - | " + self.encoderSettings + self.encoderPasses + self.encoderPassTwo + self.encoderOutput + tempOutputFile + self.encoderOutputStats + tempOutputFileLog)
+                            self.video_queue_first_pass.append("ffmpeg -i " + tempInputFile + " -pix_fmt " + self.pipeColorFMT + " -color_range 0 -vsync 0 -f yuv4mpegpipe - | " + self.encoderSettings + self.encoder_passes + self.encoderPassOne + self.encoderOutput + "/dev/null " + self.encoderOutputStats + tempOutputFileLog)
+                            self.video_queue_second_pass.append("ffmpeg -i " + tempInputFile + " -pix_fmt " + self.pipeColorFMT + " -color_range 0 -vsync 0 -f yuv4mpegpipe - | " + self.encoderSettings + self.encoder_passes + self.encoderPassTwo + self.encoderOutput + tempOutputFile + self.encoderOutputStats + tempOutputFileLog)
 
     #  ═══════════════════════════════════════ Encoding ═══════════════════════════════════════
     def mainEncode(self):
         self.labelStatus.setText("Status: Encoding")
 
         poolSize = self.comboBoxWorkerCount.currentIndex() + 1
-        queueOne = self.videoQueueFirstPass
-        queueTwo = self.videoQueueSecondPass
+        queueOne = self.video_queue_first_pass
+        queueTwo = self.video_queue_second_pass
 
         self.progressBar.setMaximum(len(queueOne) + len(queueTwo))
 
         # Create a QThread object
         self.thread = QThread()
         # Create a worker object
-        self.worker = Worker()
+        self.worker = worker.Worker()
         # Move worker to the thread
         self.worker.moveToThread(self.thread)
         # Connect signals and slots
@@ -636,8 +739,13 @@ class neav1e(QtWidgets.QMainWindow):
                 tempInputFile = '\u0027' + os.path.join(self.tempDir, self.tempDirFileName, "Chunks", file) + '\u0027'
                 f.write("file " + tempInputFile + "\n")
         f.close()
-
-        subprocess.call(['ffmpeg', '-y','-f', 'concat', '-safe', '0', '-i', os.path.join(self.tempDir, self.tempDirFileName, "Chunks", "mux.txt"), '-c', 'copy', self.videoOutput])
+        if self.audio_encoding:
+            temp_video = os.path.join(self.tempDir, self.tempDirFileName, "temp.mkv")
+            temp_audio = os.path.join(self.tempDir, self.tempDirFileName, "Audio", "audio.mkv")
+            subprocess.call(['ffmpeg', '-y','-f', 'concat', '-safe', '0', '-i', os.path.join(self.tempDir, self.tempDirFileName, "Chunks", "mux.txt"), '-c', 'copy', temp_video])
+            subprocess.call(['ffmpeg', '-y','-i', temp_video, '-i', temp_audio, '-c', 'copy', self.videoOutput])
+        else:
+            subprocess.call(['ffmpeg', '-y','-f', 'concat', '-safe', '0', '-i', os.path.join(self.tempDir, self.tempDirFileName, "Chunks", "mux.txt"), '-c', 'copy', self.videoOutput])
 
 
 if __name__ == "__main__":
