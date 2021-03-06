@@ -24,5 +24,5 @@ For Windows users check out the non Qt version: [NotEnoughAV1Encodes](https://gi
 - [ ] Batch Encoding
 - [ ] Cancel Process
 - [ ] Resume Process
-- [ ] Clear temp files after encode
+- [X] Clear temp files after encode
 - [ ] Logging

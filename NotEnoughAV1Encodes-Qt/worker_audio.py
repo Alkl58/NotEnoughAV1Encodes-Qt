@@ -26,7 +26,7 @@ class WorkerAudio(QObject):
         audio_codec : list - audio encoding parameters
         audio_output : string - path of the audio output
         """
-        cmd="ffmpeg -i " + '\u0022' + video_input + '\u0022' + " -map_metadata -1 -vn -sn " + audio_codec + " " + audio_output
+        cmd="ffmpeg -i " + '\u0022' + video_input + '\u0022' + " -map_metadata -1 -vn -sn " + audio_codec + " " + '\u0022' + audio_output + '\u0022'
         _ = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,universal_newlines=True, shell=True)
 
         self.finished.emit()
