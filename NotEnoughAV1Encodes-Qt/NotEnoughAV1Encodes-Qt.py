@@ -17,6 +17,8 @@ from PyQt5.QtWidgets import QFileDialog, QMessageBox, QInputDialog
 
 import worker
 import worker_splitting
+import worker_progress
+import worker_framecount
 import worker_scene
 import worker_audio
 
@@ -665,6 +667,8 @@ class neav1e(QtWidgets.QMainWindow):
         # Create Temp Folder if not existant
         out_path = Path(os.path.join(self.tempDir, self.temp_dir_file_name, "Chunks"))
         out_path.mkdir(parents=True, exist_ok=True)
+        out_path = Path(os.path.join(self.tempDir, self.temp_dir_file_name, "Progress"))
+        out_path.mkdir(parents=True, exist_ok=True)
         # Select the correct splitting method
         current_index = self.comboBoxSplittingMethod.currentIndex()
         if current_index == 0:
@@ -708,7 +712,7 @@ class neav1e(QtWidgets.QMainWindow):
 
     def ffmpeg_splitting_finished(self):
         self.set_queue()
-        self.main_encode()
+        self.get_source_framecount()
 
     def ffmpeg_scene_detect(self):
         threshold = str(self.doubleSpinBoxFFmpegSceneThreshold.value())
@@ -888,19 +892,23 @@ class neav1e(QtWidgets.QMainWindow):
                     out_file_name = str(counter).zfill(6)
                     temp_input_file = '\u0022' + self.video_input + '\u0022'
                     temp_output_file = '\u0022' + os.path.join(self.tempDir, self.temp_dir_file_name, "Chunks", "split" + out_file_name + ".ivf") + '\u0022'
+
                     if passes == 0:
+                        temp_progress = " -progress " + '\u0022' + os.path.join(self.tempDir, self.temp_dir_file_name, "Progress", "split" + out_file_name + ".log") + '\u0022'
                         if encoder == 2: # svt-av1 specific
-                            self.video_queue_first_pass.append("ffmpeg -i " + temp_input_file + " " + seek_point.rstrip() + " -pix_fmt " + self.pipe_color_fmt + " " + self.filter_command + " -color_range 0 -vsync 0 -nostdin -f yuv4mpegpipe - | " + self.encoder_settings + self.encoder_passes + self.encoder_output + temp_output_file)
+                            self.video_queue_first_pass.append("ffmpeg -loglevel 0 " + temp_progress + " -i " + temp_input_file + " " + seek_point.rstrip() + " -pix_fmt " + self.pipe_color_fmt + " " + self.filter_command + " -color_range 0 -vsync 0 -nostdin -f yuv4mpegpipe - | " + self.encoder_settings + self.encoder_passes + self.encoder_output + temp_output_file)
                         else:
-                            self.video_queue_first_pass.append("ffmpeg -i " + temp_input_file + " " + seek_point.rstrip() + " -pix_fmt " + self.pipe_color_fmt + " " + self.filter_command + " -color_range 0 -vsync 0 -f yuv4mpegpipe - | " + self.encoder_settings + self.encoder_passes + self.encoder_output + temp_output_file)
+                            self.video_queue_first_pass.append("ffmpeg -loglevel 0 " + temp_progress + " -i " + temp_input_file + " " + seek_point.rstrip() + " -pix_fmt " + self.pipe_color_fmt + " " + self.filter_command + " -color_range 0 -vsync 0 -f yuv4mpegpipe - | " + self.encoder_settings + self.encoder_passes + self.encoder_output + temp_output_file)
                     elif passes == 1:
                         temp_output_file_log = '\u0022' + os.path.join(self.tempDir, self.temp_dir_file_name, "Chunks", "split" + out_file_name + ".stats") + '\u0022'
+                        temp_progress_first = " -progress " + '\u0022' + os.path.join(self.tempDir, self.temp_dir_file_name, "Progress", "1st_split" + out_file_name + ".log") + '\u0022'
+                        temp_progress_second = " -progress " + '\u0022' + os.path.join(self.tempDir, self.temp_dir_file_name, "Progress", "2nd_split" + out_file_name + ".log") + '\u0022'
                         if encoder == 2: # svt-av1 specific
-                            self.video_queue_first_pass.append("ffmpeg -i " + temp_input_file + " " + seek_point.rstrip() + " -pix_fmt " + self.pipe_color_fmt + " " + self.filter_command + " -color_range 0 -vsync 0 -nostdin -f yuv4mpegpipe - | " + self.encoder_settings + self.encoder_passes + self.encoder_pass_one + self.encoder_output + self.null_path + self.encoder_output_stats + temp_output_file_log)
-                            self.video_queue_second_pass.append("ffmpeg -i " + temp_input_file + " " + seek_point.rstrip() + " -pix_fmt " + self.pipe_color_fmt + " " + self.filter_command + " -color_range 0 -vsync 0 -nostdin -f yuv4mpegpipe - | " + self.encoder_settings + self.encoder_passes + self.encoder_pass_two + self.encoder_output + temp_output_file + self.encoder_output_stats + temp_output_file_log)
+                            self.video_queue_first_pass.append("ffmpeg -loglevel 0 " + temp_progress_first + " -i " + temp_input_file + " " + seek_point.rstrip() + " -pix_fmt " + self.pipe_color_fmt + " " + self.filter_command + " -color_range 0 -vsync 0 -nostdin -f yuv4mpegpipe - | " + self.encoder_settings + self.encoder_passes + self.encoder_pass_one + self.encoder_output + self.null_path + self.encoder_output_stats + temp_output_file_log)
+                            self.video_queue_second_pass.append("ffmpeg -loglevel 0 " + temp_progress_second + " -i " + temp_input_file + " " + seek_point.rstrip() + " -pix_fmt " + self.pipe_color_fmt + " " + self.filter_command + " -color_range 0 -vsync 0 -nostdin -f yuv4mpegpipe - | " + self.encoder_settings + self.encoder_passes + self.encoder_pass_two + self.encoder_output + temp_output_file + self.encoder_output_stats + temp_output_file_log)
                         else:
-                            self.video_queue_first_pass.append("ffmpeg -i " + temp_input_file + " " + seek_point.rstrip() + " -pix_fmt " + self.pipe_color_fmt + " " + self.filter_command + " -color_range 0 -vsync 0 -f yuv4mpegpipe - | " + self.encoder_settings + self.encoder_passes + self.encoder_pass_one + self.encoder_output + self.null_path + self.encoder_output_stats + temp_output_file_log)
-                            self.video_queue_second_pass.append("ffmpeg -i " + temp_input_file + " " + seek_point.rstrip() + " -pix_fmt " + self.pipe_color_fmt + " " + self.filter_command + " -color_range 0 -vsync 0 -f yuv4mpegpipe - | " + self.encoder_settings + self.encoder_passes + self.encoder_pass_two + self.encoder_output + temp_output_file + self.encoder_outputStats + temp_output_file_log)
+                            self.video_queue_first_pass.append("ffmpeg -loglevel 0 " + temp_progress_first + " -i " + temp_input_file + " " + seek_point.rstrip() + " -pix_fmt " + self.pipe_color_fmt + " " + self.filter_command + " -color_range 0 -vsync 0 -f yuv4mpegpipe - | " + self.encoder_settings + self.encoder_passes + self.encoder_pass_one + self.encoder_output + self.null_path + self.encoder_output_stats + temp_output_file_log)
+                            self.video_queue_second_pass.append("ffmpeg -loglevel 0 " + temp_progress_second + " -i " + temp_input_file + " " + seek_point.rstrip() + " -pix_fmt " + self.pipe_color_fmt + " " + self.filter_command + " -color_range 0 -vsync 0 -f yuv4mpegpipe - | " + self.encoder_settings + self.encoder_passes + self.encoder_pass_two + self.encoder_output + temp_output_file + self.encoder_outputStats + temp_output_file_log)
                     counter += 1
         elif current_index == 1:
             # Equal Chunking
@@ -911,20 +919,68 @@ class neav1e(QtWidgets.QMainWindow):
                     temp_input_file = '\u0022' + os.path.join(self.tempDir, self.temp_dir_file_name, "Chunks", file) + '\u0022'
                     temp_output_file = '\u0022' + os.path.join(self.tempDir, self.temp_dir_file_name, "Chunks", os.path.splitext(os.path.basename(str(file)))[0] + ".ivf") + '\u0022'
                     if passes == 0:
+                        temp_progress = " -progress " + '\u0022' + os.path.join(self.tempDir, self.temp_dir_file_name, "Progress", os.path.splitext(os.path.basename(str(file)))[0] + ".log") + '\u0022'
                         if encoder == 2: # svt-av1 specific
-                            self.video_queue_first_pass.append("ffmpeg -i " + temp_input_file + " -pix_fmt " + self.pipe_color_fmt + " -color_range 0 -vsync 0 -nostdin -f yuv4mpegpipe - | " + self.encoder_settings + self.encoder_passes + self.encoder_output + temp_output_file)
+                            self.video_queue_first_pass.append("ffmpeg -loglevel 0 " + temp_progress + " -i " + temp_input_file + " -pix_fmt " + self.pipe_color_fmt + " -color_range 0 -vsync 0 -nostdin -f yuv4mpegpipe - | " + self.encoder_settings + self.encoder_passes + self.encoder_output + temp_output_file)
                         else:
-                            self.video_queue_first_pass.append("ffmpeg -i " + temp_input_file + " -pix_fmt " + self.pipe_color_fmt + " -color_range 0 -vsync 0 -f yuv4mpegpipe - | " + self.encoder_settings + self.encoder_passes + self.encoder_output + temp_output_file)
+                            self.video_queue_first_pass.append("ffmpeg -loglevel 0 " + temp_progress + " -i " + temp_input_file + " -pix_fmt " + self.pipe_color_fmt + " -color_range 0 -vsync 0 -f yuv4mpegpipe - | " + self.encoder_settings + self.encoder_passes + self.encoder_output + temp_output_file)
                     elif passes == 1:
                         temp_output_file_log = '\u0022' + os.path.join(self.tempDir, self.temp_dir_file_name, "Chunks", os.path.splitext(os.path.basename(str(file)))[0] + ".stats") + '\u0022'
+                        temp_progress_first = " -progress " + '\u0022' + os.path.join(self.tempDir, self.temp_dir_file_name, "Progress", "1st_split" + os.path.splitext(os.path.basename(str(file)))[0] + ".log") + '\u0022'
+                        temp_progress_second = " -progress " + '\u0022' + os.path.join(self.tempDir, self.temp_dir_file_name, "Progress", "2nd_split" + os.path.splitext(os.path.basename(str(file)))[0] + ".log") + '\u0022'
                         if encoder == 2: # svt-av1 specific
-                            self.video_queue_first_pass.append("ffmpeg -i " + temp_input_file + " -pix_fmt " + self.pipe_color_fmt + " -color_range 0 -vsync 0 -nostdin -f yuv4mpegpipe - | " + self.encoder_settings + self.encoder_passes + self.encoder_pass_one + self.encoder_output + self.null_path + self.encoder_output_stats + temp_output_file_log)
-                            self.video_queue_second_pass.append("ffmpeg -i " + temp_input_file + " -pix_fmt " + self.pipe_color_fmt + " -color_range 0 -vsync 0 -nostdin -f yuv4mpegpipe - | " + self.encoder_settings + self.encoder_passes + self.encoder_pass_two + self.encoder_output + temp_output_file + self.encoder_output_stats + temp_output_file_log)
+                            self.video_queue_first_pass.append("ffmpeg -loglevel 0 " + temp_progress_first + " -i " + temp_input_file + " -pix_fmt " + self.pipe_color_fmt + " -color_range 0 -vsync 0 -nostdin -f yuv4mpegpipe - | " + self.encoder_settings + self.encoder_passes + self.encoder_pass_one + self.encoder_output + self.null_path + self.encoder_output_stats + temp_output_file_log)
+                            self.video_queue_second_pass.append("ffmpeg -loglevel 0 " + temp_progress_second + " -i " + temp_input_file + " -pix_fmt " + self.pipe_color_fmt + " -color_range 0 -vsync 0 -nostdin -f yuv4mpegpipe - | " + self.encoder_settings + self.encoder_passes + self.encoder_pass_two + self.encoder_output + temp_output_file + self.encoder_output_stats + temp_output_file_log)
                         else:
-                            self.video_queue_first_pass.append("ffmpeg -i " + temp_input_file + " -pix_fmt " + self.pipe_color_fmt + " -color_range 0 -vsync 0 -f yuv4mpegpipe - | " + self.encoder_settings + self.encoder_passes + self.encoder_pass_one + self.encoder_output + self.null_path + self.encoder_output_stats + temp_output_file_log)
-                            self.video_queue_second_pass.append("ffmpeg -i " + temp_input_file + " -pix_fmt " + self.pipe_color_fmt + " -color_range 0 -vsync 0 -f yuv4mpegpipe - | " + self.encoder_settings + self.encoder_passes + self.encoder_pass_two + self.encoder_output + temp_output_file + self.encoder_output_stats + temp_output_file_log)
+                            self.video_queue_first_pass.append("ffmpeg -loglevel 0 " + temp_progress_first + " -i " + temp_input_file + " -pix_fmt " + self.pipe_color_fmt + " -color_range 0 -vsync 0 -f yuv4mpegpipe - | " + self.encoder_settings + self.encoder_passes + self.encoder_pass_one + self.encoder_output + self.null_path + self.encoder_output_stats + temp_output_file_log)
+                            self.video_queue_second_pass.append("ffmpeg -loglevel 0 " + temp_progress_second + " -i " + temp_input_file + " -pix_fmt " + self.pipe_color_fmt + " -color_range 0 -vsync 0 -f yuv4mpegpipe - | " + self.encoder_settings + self.encoder_passes + self.encoder_pass_two + self.encoder_output + temp_output_file + self.encoder_output_stats + temp_output_file_log)
 
     #  ═══════════════════════════════════════ Encoding ═══════════════════════════════════════
+
+    def set_framecount(self, count):
+        frame_count = count
+        if self.comboBoxPasses.currentIndex() == 1:
+            frame_count = frame_count * 2
+        if self.groupBoxDeinterlace.isChecked() and self.comboBoxDeinterlace.currentIndex() == 1:
+            frame_count = frame_count * 2
+        self.progressBar.setMaximum(frame_count)
+
+    def get_source_framecount(self):
+        # Create a QThread object
+        self.frame_thread = QThread()
+        # Create a worker object
+        self.frame_worker = worker_framecount.WorkerFramecount()
+        # Move worker to the thread
+        self.frame_worker.moveToThread(self.frame_thread)
+        # Connect signals and slots
+        self.frame_thread.started.connect(partial(self.frame_worker.run, self.video_input))
+        self.frame_worker.finished.connect(self.frame_thread.quit)
+        self.frame_worker.finished.connect(self.frame_worker.deleteLater)
+        self.frame_worker.finished.connect(self.main_encode)
+        self.frame_thread.finished.connect(self.frame_thread.deleteLater)
+        self.frame_worker.framecount.connect(self.set_framecount)
+        # Start the thread
+        self.frame_thread.start()
+
+
+    def calc_progress(self):
+        log_path = os.path.join(self.tempDir, self.temp_dir_file_name, "Progress")
+        mux_path = os.path.join(self.tempDir, self.temp_dir_file_name, "Chunks", "mux.txt")
+        print(mux_path)
+        # Create a QThread object
+        self.calc_thread = QThread()
+        # Create a worker object
+        self.calc_worker = worker_progress.WorkerProgress()
+        # Move worker to the thread
+        self.calc_worker.moveToThread(self.calc_thread)
+        # Connect signals and slots
+        self.calc_thread.started.connect(partial(self.calc_worker.run, log_path, mux_path))
+        self.calc_worker.finished.connect(self.calc_thread.quit)
+        self.calc_worker.finished.connect(self.calc_worker.deleteLater)
+        self.calc_thread.finished.connect(self.calc_thread.deleteLater)
+        self.calc_worker.progress.connect(self.report_progress)
+        # Start the thread
+        self.calc_thread.start()
 
     def main_encode(self):
         self.labelStatus.setText("Status: Encoding")
@@ -932,8 +988,6 @@ class neav1e(QtWidgets.QMainWindow):
         pool_size = self.comboBoxWorkerCount.currentIndex() + 1
         queue_one = self.video_queue_first_pass
         queue_two = self.video_queue_second_pass
-
-        self.progressBar.setMaximum(len(queue_one) + len(queue_two))
 
         # Create a QThread object
         self.thread = QThread()
@@ -947,9 +1001,9 @@ class neav1e(QtWidgets.QMainWindow):
         self.worker.finished.connect(self.worker_finished)
         self.worker.finished.connect(self.worker.deleteLater)
         self.thread.finished.connect(self.thread.deleteLater)
-        self.worker.progress.connect(self.report_progress)
         # Start the thread
         self.thread.start()
+        self.calc_progress()
 
     def worker_finished(self):
         self.labelStatus.setText("Status: Muxing")

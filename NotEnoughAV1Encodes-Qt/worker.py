@@ -17,10 +17,8 @@ class Worker(QObject):
     Signals
     ----------
     finished : returns if all work is finished
-    progress : emits the progress of the subprogress in the run function
     """
     finished = pyqtSignal()
-    progress = pyqtSignal(int)
     @pyqtSlot()
     def run(self, pool_size, queue_first, queue_second):
         """
@@ -32,7 +30,7 @@ class Worker(QObject):
         """
         pool = Pool(pool_size)
         for i, _ in enumerate(pool.imap(partial(call, shell=True), queue_first)):  # Multi Threaded Encoding
-            self.progress.emit(i + 1)
+            print("Finished Worker: " + str(i))
         for i, _ in enumerate(pool.imap(partial(call, shell=True), queue_second)):  # Multi Threaded Encoding
-            self.progress.emit(i + 1)
+            print("Finished Worker: " + str(i))
         self.finished.emit()

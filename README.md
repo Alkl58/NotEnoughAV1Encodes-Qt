@@ -20,7 +20,7 @@ For Windows users check out the non Qt version: [NotEnoughAV1Encodes](https://gi
 - [X] Save & Load Custom Presets
 - [X] Audio Encoding
 - [ ] (Basic Subtitle Support)
-- [ ] Better Progress Handling
+- [X] Better Progress Handling
 - [ ] Batch Encoding
 - [ ] Cancel Process
 - [ ] Resume Process
