@@ -29,5 +29,4 @@ class WorkerAudio(QObject):
         cmd="ffmpeg -i " + '\u0022' + video_input + '\u0022' + " -map_metadata -1 -vn -sn " + audio_codec + " " + audio_output
         _ = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,universal_newlines=True, shell=True)
 
-        #subprocess.call(['ffmpeg', '-y','-i', video_input, '-map_metadata', '-1', '-vn', '-sn'] + audio_codec + audio_output)
         self.finished.emit()

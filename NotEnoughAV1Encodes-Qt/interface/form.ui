@@ -4090,14 +4090,94 @@
     <attribute name="title">
      <string>Preferences</string>
     </attribute>
+    <widget class="QGroupBox" name="groupBox_10">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>10</y>
+       <width>321</width>
+       <height>171</height>
+      </rect>
+     </property>
+     <property name="title">
+      <string>Program Settings</string>
+     </property>
+     <widget class="QCheckBox" name="checkBoxDeleteTempFiles">
+      <property name="geometry">
+       <rect>
+        <x>30</x>
+        <y>30</y>
+        <width>211</width>
+        <height>41</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Delete temp file after encode</string>
+      </property>
+     </widget>
+    </widget>
+    <widget class="QGroupBox" name="groupBox_11">
+     <property name="geometry">
+      <rect>
+       <x>710</x>
+       <y>10</y>
+       <width>91</width>
+       <height>101</height>
+      </rect>
+     </property>
+     <property name="title">
+      <string>Version 0.1</string>
+     </property>
+     <widget class="QPushButton" name="pushButtonGithub">
+      <property name="geometry">
+       <rect>
+        <x>20</x>
+        <y>30</y>
+        <width>51</width>
+        <height>51</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string/>
+      </property>
+      <property name="icon">
+       <iconset>
+        <normaloff>../img/github.png</normaloff>../img/github.png</iconset>
+      </property>
+      <property name="iconSize">
+       <size>
+        <width>42</width>
+        <height>42</height>
+       </size>
+      </property>
+     </widget>
+    </widget>
+    <widget class="QLabel" name="label_58">
+     <property name="geometry">
+      <rect>
+       <x>650</x>
+       <y>360</y>
+       <width>161</width>
+       <height>31</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>9</pointsize>
+      </font>
+     </property>
+     <property name="text">
+      <string>Icons from: https://icons8.de</string>
+     </property>
+    </widget>
    </widget>
   </widget>
   <widget class="QProgressBar" name="progressBar">
    <property name="geometry">
     <rect>
-     <x>20</x>
+     <x>10</x>
      <y>520</y>
-     <width>691</width>
+     <width>661</width>
      <height>31</height>
     </rect>
    </property>
@@ -4120,9 +4200,9 @@
   <widget class="QLabel" name="labelStatus">
    <property name="geometry">
     <rect>
-     <x>710</x>
+     <x>680</x>
      <y>520</y>
-     <width>121</width>
+     <width>151</width>
      <height>31</height>
     </rect>
    </property>

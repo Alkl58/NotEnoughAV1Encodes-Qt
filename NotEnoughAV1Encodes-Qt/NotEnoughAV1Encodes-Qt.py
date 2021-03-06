@@ -4,6 +4,8 @@
 import os
 import sys
 import json
+import shutil
+import webbrowser
 import subprocess
 
 from pathlib import Path
@@ -24,6 +26,8 @@ class neav1e(QtWidgets.QMainWindow):
 
     video_input = None
     video_output = None
+
+    null_path = os.devnull
 
     audio_encoding = False
 
@@ -94,13 +98,18 @@ class neav1e(QtWidgets.QMainWindow):
         # Custom Settings
         self.groupBoxCustomSettings.toggled.connect(self.toggle_custom_settings)
 
+        # Preferences
+        self.checkBoxDeleteTempFiles.stateChanged.connect(self.save_preferences)
+        self.pushButtonGithub.clicked.connect(self.open_github)
+
         # Preset
         self.pushButtonSaveNewPreset.clicked.connect(self.save_new_preset)
         self.pushButtonDeletePreset.clicked.connect(self.delete_preset)
         self.pushButtonLoadPreset.clicked.connect(self.load_preset)
-        self.pushButtonSetDefaultPreset.clicked.connect(self.save_default_preset)
+        self.pushButtonSetDefaultPreset.clicked.connect(self.save_preferences)
+
         self.load_preset_startup()
-        self.load_default_preset()
+        self.load_preferences()
 
         # !!! CHANGE IN UI FILE !!!
         self.labelSplittingChunkLength.hide()
@@ -243,6 +252,9 @@ class neav1e(QtWidgets.QMainWindow):
         self.groupBoxTrackFour.setChecked(track_four)
 
     #  ═══════════════════════════════════════ UI Logic ═══════════════════════════════════════
+
+    def open_github(self):
+        webbrowser.open('https://github.com/Alkl58/NotEnoughAV1Encodes-Qt', new=2)
 
     def fill_audio_language(self):
         # Clears Audio Language ComboBox & fills it with the dictionary
@@ -388,26 +400,6 @@ class neav1e(QtWidgets.QMainWindow):
             self.save_preset(text_preset)
 
     #  ═════════════════════════════════════════ Preset ═══════════════════════════════════════
-
-    def load_default_preset(self):
-        if os.path.isfile(os.path.join(self.current_dir, "default.json")):
-            with open(os.path.join(self.current_dir, "default.json")) as json_file:
-                data = json.load(json_file)
-                for p in data['default']:
-                    index = self.comboBoxPresets.findText(p['preset'], Qt.MatchFixedString)
-                    if index >= 0:
-                        self.comboBoxPresets.setCurrentIndex(index)
-                        self.load_preset()
-
-    def save_default_preset(self):
-        save_data = {}
-        save_data['default'] = []
-        save_data['default'].append({
-            'preset': self.comboBoxPresets.currentText()
-        })
-        # Save JSON
-        with open(os.path.join(self.current_dir, "default.json"), 'w') as outfile:
-            json.dump(save_data, outfile)
 
     def load_preset(self):
 
@@ -581,6 +573,29 @@ class neav1e(QtWidgets.QMainWindow):
             json.dump(save_data, outfile)
         self.comboBoxPresets.clear()
         self.load_preset_startup()
+
+    def save_preferences(self):
+        save_data = {}
+        save_data['preferences'] = []
+        save_data['preferences'].append({
+            'preset': self.comboBoxPresets.currentText(),
+            'delete_temp_files': self.checkBoxDeleteTempFiles.isChecked()
+        })
+        # Save JSON
+        with open(os.path.join(self.current_dir, "preferences.json"), 'w') as outfile:
+            json.dump(save_data, outfile)
+
+    def load_preferences(self):
+        if os.path.isfile(os.path.join(self.current_dir, "preferences.json")):
+            with open(os.path.join(self.current_dir, "preferences.json")) as json_file:
+                data = json.load(json_file)
+                for p in data['preferences']:
+                    self.checkBoxDeleteTempFiles.setChecked(p['delete_temp_files'])
+                    index = self.comboBoxPresets.findText(p['preset'], Qt.MatchFixedString)
+                    if index >= 0:
+                        self.comboBoxPresets.setCurrentIndex(index)
+                        self.load_preset()
+
 
     #  ════════════════════════════════════════ Filters ═══════════════════════════════════════
 
@@ -881,10 +896,10 @@ class neav1e(QtWidgets.QMainWindow):
                     elif passes == 1:
                         temp_output_file_log = '\u0022' + os.path.join(self.tempDir, self.temp_dir_file_name, "Chunks", "split" + out_file_name + ".stats") + '\u0022'
                         if encoder == 2: # svt-av1 specific
-                            self.video_queue_first_pass.append("ffmpeg -i " + temp_input_file + " " + seek_point.rstrip() + " -pix_fmt " + self.pipe_color_fmt + " " + self.filter_command + " -color_range 0 -vsync 0 -nostdin -f yuv4mpegpipe - | " + self.encoder_settings + self.encoder_passes + self.encoder_pass_one + self.encoder_output + "/dev/null " + self.encoder_output_stats + temp_output_file_log)
+                            self.video_queue_first_pass.append("ffmpeg -i " + temp_input_file + " " + seek_point.rstrip() + " -pix_fmt " + self.pipe_color_fmt + " " + self.filter_command + " -color_range 0 -vsync 0 -nostdin -f yuv4mpegpipe - | " + self.encoder_settings + self.encoder_passes + self.encoder_pass_one + self.encoder_output + self.null_path + self.encoder_output_stats + temp_output_file_log)
                             self.video_queue_second_pass.append("ffmpeg -i " + temp_input_file + " " + seek_point.rstrip() + " -pix_fmt " + self.pipe_color_fmt + " " + self.filter_command + " -color_range 0 -vsync 0 -nostdin -f yuv4mpegpipe - | " + self.encoder_settings + self.encoder_passes + self.encoder_pass_two + self.encoder_output + temp_output_file + self.encoder_output_stats + temp_output_file_log)
                         else:
-                            self.video_queue_first_pass.append("ffmpeg -i " + temp_input_file + " " + seek_point.rstrip() + " -pix_fmt " + self.pipe_color_fmt + " " + self.filter_command + " -color_range 0 -vsync 0 -f yuv4mpegpipe - | " + self.encoder_settings + self.encoder_passes + self.encoder_pass_one + self.encoder_output + "/dev/null " + self.encoder_output_stats + temp_output_file_log)
+                            self.video_queue_first_pass.append("ffmpeg -i " + temp_input_file + " " + seek_point.rstrip() + " -pix_fmt " + self.pipe_color_fmt + " " + self.filter_command + " -color_range 0 -vsync 0 -f yuv4mpegpipe - | " + self.encoder_settings + self.encoder_passes + self.encoder_pass_one + self.encoder_output + self.null_path + self.encoder_output_stats + temp_output_file_log)
                             self.video_queue_second_pass.append("ffmpeg -i " + temp_input_file + " " + seek_point.rstrip() + " -pix_fmt " + self.pipe_color_fmt + " " + self.filter_command + " -color_range 0 -vsync 0 -f yuv4mpegpipe - | " + self.encoder_settings + self.encoder_passes + self.encoder_pass_two + self.encoder_output + temp_output_file + self.encoder_outputStats + temp_output_file_log)
                     counter += 1
         elif current_index == 1:
@@ -903,10 +918,10 @@ class neav1e(QtWidgets.QMainWindow):
                     elif passes == 1:
                         temp_output_file_log = '\u0022' + os.path.join(self.tempDir, self.temp_dir_file_name, "Chunks", os.path.splitext(os.path.basename(str(file)))[0] + ".stats") + '\u0022'
                         if encoder == 2: # svt-av1 specific
-                            self.video_queue_first_pass.append("ffmpeg -i " + temp_input_file + " -pix_fmt " + self.pipe_color_fmt + " -color_range 0 -vsync 0 -nostdin -f yuv4mpegpipe - | " + self.encoder_settings + self.encoder_passes + self.encoder_pass_one + self.encoder_output + "/dev/null " + self.encoder_output_stats + temp_output_file_log)
+                            self.video_queue_first_pass.append("ffmpeg -i " + temp_input_file + " -pix_fmt " + self.pipe_color_fmt + " -color_range 0 -vsync 0 -nostdin -f yuv4mpegpipe - | " + self.encoder_settings + self.encoder_passes + self.encoder_pass_one + self.encoder_output + self.null_path + self.encoder_output_stats + temp_output_file_log)
                             self.video_queue_second_pass.append("ffmpeg -i " + temp_input_file + " -pix_fmt " + self.pipe_color_fmt + " -color_range 0 -vsync 0 -nostdin -f yuv4mpegpipe - | " + self.encoder_settings + self.encoder_passes + self.encoder_pass_two + self.encoder_output + temp_output_file + self.encoder_output_stats + temp_output_file_log)
                         else:
-                            self.video_queue_first_pass.append("ffmpeg -i " + temp_input_file + " -pix_fmt " + self.pipe_color_fmt + " -color_range 0 -vsync 0 -f yuv4mpegpipe - | " + self.encoder_settings + self.encoder_passes + self.encoder_pass_one + self.encoder_output + "/dev/null " + self.encoder_output_stats + temp_output_file_log)
+                            self.video_queue_first_pass.append("ffmpeg -i " + temp_input_file + " -pix_fmt " + self.pipe_color_fmt + " -color_range 0 -vsync 0 -f yuv4mpegpipe - | " + self.encoder_settings + self.encoder_passes + self.encoder_pass_one + self.encoder_output + self.null_path + self.encoder_output_stats + temp_output_file_log)
                             self.video_queue_second_pass.append("ffmpeg -i " + temp_input_file + " -pix_fmt " + self.pipe_color_fmt + " -color_range 0 -vsync 0 -f yuv4mpegpipe - | " + self.encoder_settings + self.encoder_passes + self.encoder_pass_two + self.encoder_output + temp_output_file + self.encoder_output_stats + temp_output_file_log)
 
     #  ═══════════════════════════════════════ Encoding ═══════════════════════════════════════
@@ -960,6 +975,26 @@ class neav1e(QtWidgets.QMainWindow):
             subprocess.call(['ffmpeg', '-y','-i', temp_video, '-i', temp_audio, '-c', 'copy', self.video_output])
         else:
             subprocess.call(['ffmpeg', '-y','-f', 'concat', '-safe', '0', '-i', os.path.join(self.tempDir, self.temp_dir_file_name, "Chunks", "mux.txt"), '-c', 'copy', self.video_output])
+        self.delete_temp_files()
+
+    def delete_temp_files(self):
+        if self.checkBoxDeleteTempFiles.isChecked():
+            if os.path.isfile(self.video_output):
+                if os.stat(self.video_output).st_size >= 50000:
+                    #print(os.path.join(self.tempDir, self.temp_dir_file_name))
+                    shutil.rmtree(os.path.join(self.tempDir, self.temp_dir_file_name))
+                else:
+                    msg = QMessageBox()
+                    msg.setIcon(QMessageBox.Warning)
+                    msg.setText("Output File found, but there could be a muxing issue.")
+                    msg.setWindowTitle("Attention")
+                    msg.exec()
+            else:
+                msg = QMessageBox()
+                msg.setIcon(QMessageBox.Critical)
+                msg.setText("Output File not found!")
+                msg.setWindowTitle("Attention")
+                msg.exec()
 
 
 if __name__ == "__main__":
