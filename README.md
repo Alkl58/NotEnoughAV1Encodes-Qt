@@ -17,7 +17,7 @@ For Windows users check out the non Qt version: ![NotEnoughAV1Encodes](https://g
 - [X] Advanced rav1e settings
 - [X] Advanced svt-av1 settings
 - [X] Custom Settings
-- [ ] Save & Load Custom Presets
+- [X] Save & Load Custom Presets
 - [X] Audio Encoding
 - [ ] (Basic Subtitle Support)
 - [ ] Better Progress Handling

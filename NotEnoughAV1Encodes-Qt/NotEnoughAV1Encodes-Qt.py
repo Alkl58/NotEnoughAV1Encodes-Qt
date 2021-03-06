@@ -3,14 +3,15 @@
 
 import os
 import sys
+import json
 import subprocess
 
 from pathlib import Path
 from shutil import which
 from functools import partial
 from PyQt5 import QtWidgets, uic
-from PyQt5.QtCore import QThread
-from PyQt5.QtWidgets import QFileDialog, QMessageBox
+from PyQt5.QtCore import QThread, Qt
+from PyQt5.QtWidgets import QFileDialog, QMessageBox, QInputDialog
 
 import worker
 import worker_splitting
@@ -38,6 +39,7 @@ class neav1e(QtWidgets.QMainWindow):
     pipe_color_fmt = None
     filter_command = None
 
+    current_dir = os.path.dirname(os.path.abspath(__file__))
     tempDir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Temp")
     temp_dir_file_name = None
     recommended_worker_count = None
@@ -59,7 +61,7 @@ class neav1e(QtWidgets.QMainWindow):
 
     def __init__(self):
         super(neav1e, self).__init__()
-        pth = os.path.join(os.path.dirname(__file__), "form.ui")  # Set path ui
+        pth = os.path.join(os.path.dirname(__file__), "interface", "form.ui")  # Set path ui
         uic.loadUi(pth, self)  # Load the .ui file
         self.setFixedWidth(842)  # Set Window Width
         self.setFixedHeight(568)  # Set Window Height
@@ -91,6 +93,14 @@ class neav1e(QtWidgets.QMainWindow):
 
         # Custom Settings
         self.groupBoxCustomSettings.toggled.connect(self.toggle_custom_settings)
+
+        # Preset
+        self.pushButtonSaveNewPreset.clicked.connect(self.save_new_preset)
+        self.pushButtonDeletePreset.clicked.connect(self.delete_preset)
+        self.pushButtonLoadPreset.clicked.connect(self.load_preset)
+        self.pushButtonSetDefaultPreset.clicked.connect(self.save_default_preset)
+        self.load_preset_startup()
+        self.load_default_preset()
 
         # !!! CHANGE IN UI FILE !!!
         self.labelSplittingChunkLength.hide()
@@ -286,6 +296,7 @@ class neav1e(QtWidgets.QMainWindow):
             msg.exec()
 
     def set_encoder_ui(self, encoder):
+        self.set_summary_encoder()
         if encoder == 0:
             #aomenc
             self.horizontalSliderEncoderSpeed.setMaximum(9)
@@ -321,6 +332,9 @@ class neav1e(QtWidgets.QMainWindow):
     def set_summary_splitting(self):
         self.labelSummarySplitting.setText(str(self.comboBoxSplittingMethod.currentText()))
 
+    def set_summary_encoder(self):
+        self.labelSummaryEncoder.setText(str(self.comboBoxEncoder.currentText()))
+
     def report_progress(self, signal):
         self.progressBar.setValue(signal)
 
@@ -329,6 +343,7 @@ class neav1e(QtWidgets.QMainWindow):
 
     def set_speed_slider_value(self):
         self.labelSpeed.setText(str(self.horizontalSliderEncoderSpeed.value()))
+        self.labelSummarySpeed.setText(str(self.horizontalSliderEncoderSpeed.value()))
 
     def splitting_reencode(self):
         if self.checkBoxSplittingReencode.isChecked() is True:
@@ -366,6 +381,206 @@ class neav1e(QtWidgets.QMainWindow):
         if fname:
             self.labelVideoDestination.setText(fname)
             self.video_output = fname
+
+    def save_new_preset(self):
+        text_preset, clicked_ok = QInputDialog.getText(self, 'Preset', 'Enter Preset Name')
+        if clicked_ok and text_preset:
+            self.save_preset(text_preset)
+
+    #  ═════════════════════════════════════════ Preset ═══════════════════════════════════════
+
+    def load_default_preset(self):
+        if os.path.isfile(os.path.join(self.current_dir, "default.json")):
+            with open(os.path.join(self.current_dir, "default.json")) as json_file:
+                data = json.load(json_file)
+                for p in data['default']:
+                    index = self.comboBoxPresets.findText(p['preset'], Qt.MatchFixedString)
+                    if index >= 0:
+                        self.comboBoxPresets.setCurrentIndex(index)
+                        self.load_preset()
+
+    def save_default_preset(self):
+        save_data = {}
+        save_data['default'] = []
+        save_data['default'].append({
+            'preset': self.comboBoxPresets.currentText()
+        })
+        # Save JSON
+        with open(os.path.join(self.current_dir, "default.json"), 'w') as outfile:
+            json.dump(save_data, outfile)
+
+    def load_preset(self):
+
+        # The user could load a preset after loading a video file
+        # The preset could potentially toggle the audio, even if not available
+        temp_track_one = self.groupBoxTrackOne.isEnabled()
+        temp_track_two = self.groupBoxTrackTwo.isEnabled()
+        temp_track_three = self.groupBoxTrackThree.isEnabled()
+        temp_track_four = self.groupBoxTrackFour.isEnabled()
+
+        if os.path.isfile(os.path.join(self.current_dir, 'Presets', self.comboBoxPresets.currentText() + '.json')):
+            with open(os.path.join(self.current_dir, 'Presets', self.comboBoxPresets.currentText() + '.json')) as json_file:
+                data = json.load(json_file)
+                for p in data['settings']:
+                    self.comboBoxSplittingMethod.setCurrentIndex(p['splitting_method'])
+                    self.doubleSpinBoxFFmpegSceneThreshold.setValue(p['splitting_scene_threshold'])
+                    self.spinBoxChunking.setValue(p['splitting_chunking_length'])
+                    self.checkBoxSplittingReencode.setChecked(p['splitting_chunking_reencode'])
+                    self.comboBoxSplittingReencode.setCurrentIndex(p['splitting_chunking_codec'])
+                    self.comboBoxEncoder.setCurrentIndex(p['video_encoder'])
+                    self.comboBoxBitDepth.setCurrentIndex(p['video_bit_depth'])
+                    self.comboBoxColorFormat.setCurrentIndex(p['video_color_fmt'])
+                    self.horizontalSliderEncoderSpeed.setValue(p['video_speed'])
+                    self.comboBoxPasses.setCurrentIndex(p['video_passes'])
+                    self.checkBoxAdvancedSettings.setChecked(p['video_advanced'])
+                    self.radioButtonCQ.setChecked(p['video_q'])
+                    self.radioButtonVBR.setChecked(p['video_vbr'])
+                    self.horizontalSliderQ.setValue(p['video_q_amount'])
+                    self.spinBoxVBR.setValue(p['video_vbr_amount'])
+                    self.comboBoxWorkerCount.setCurrentIndex(p['worker_count'])
+                for p in data['filters']:
+                    self.groupBoxCrop.setChecked(p['filters_crop'])
+                    self.spinBoxFilterCropTop.setValue(p['filters_crop_top'])
+                    self.spinBoxFilterCropRight.setValue(p['filters_crop_right'])
+                    self.spinBoxFilterCropBottom.setValue(p['filters_crop_bottom'])
+                    self.spinBoxFilterCropLeft.setValue(p['filters_crop_left'])
+                    self.groupBoxResize.setChecked(p['filters_resize'])
+                    self.spinBoxFilterResizeWidth.setValue(p['filters_resize_width'])
+                    self.spinBoxFilterResizeHeight.setValue(p['filters_resize_height'])
+                    self.groupBoxRotate.setChecked(p['filters_rotate'])
+                    self.comboBoxRotate.setCurrentIndex(p['filters_rotate_amount'])
+                    self.groupBoxDeinterlace.setChecked(p['filters_deinterlace'])
+                    self.comboBoxDeinterlace.setCurrentIndex(p['filters_deinterlace_type'])
+                for p in data['audio']:
+                    self.groupBoxTrackOne.setChecked(p['track_one'])
+                    self.groupBoxTrackTwo.setChecked(p['track_two'])
+                    self.groupBoxTrackThree.setChecked(p['track_three'])
+                    self.groupBoxTrackFour.setChecked(p['track_four'])
+                    self.comboBoxTrackOneCodec.setCurrentIndex(p['track_one_codec'])
+                    self.comboBoxTrackTwoCodec.setCurrentIndex(p['track_two_codec'])
+                    self.comboBoxTrackThreeCodec.setCurrentIndex(p['track_three_codec'])
+                    self.comboBoxTrackFourCodec.setCurrentIndex(p['track_four_codec'])
+                    self.spinBoxTrackOneBitrate.setValue(p['track_one_bitrate'])
+                    self.spinBoxTrackTwoBitrate.setValue(p['track_two_bitrate'])
+                    self.spinBoxTrackThreeBitrate.setValue(p['track_three_bitrate'])
+                    self.spinBoxTrackFourBitrate.setValue(p['track_four_bitrate'])
+                    self.comboBoxTrackOneLayout.setCurrentIndex(p['track_one_layout'])
+                    self.comboBoxTrackTwoLayout.setCurrentIndex(p['track_two_layout'])
+                    self.comboBoxTrackThreeLayout.setCurrentIndex(p['track_three_layout'])
+                    self.comboBoxTrackFourLayout.setCurrentIndex(p['track_four_layout'])
+                    self.comboBoxTrackOneLanguage.setCurrentIndex(p['track_one_language'])
+                    self.comboBoxTrackTwoLanguage.setCurrentIndex(p['track_two_language'])
+                    self.comboBoxTrackThreeLanguage.setCurrentIndex(p['track_three_language'])
+                    self.comboBoxTrackFourLanguage.setCurrentIndex(p['track_four_language'])
+                if temp_track_one is False:
+                    self.groupBoxTrackOne.setEnabled(False)
+                    self.groupBoxTrackOne.setChecked(False)
+                if temp_track_two is False:
+                    self.groupBoxTrackTwo.setEnabled(False)
+                    self.groupBoxTrackTwo.setChecked(False)
+                if temp_track_three is False:
+                    self.groupBoxTrackThree.setEnabled(False)
+                    self.groupBoxTrackThree.setChecked(False)
+                if temp_track_four is False:
+                    self.groupBoxTrackFour.setEnabled(False)
+                    self.groupBoxTrackFour.setChecked(False)
+
+                if self.checkBoxAdvancedSettings.isChecked():
+                    for p in data['advanced_settings']:
+                        self.groupBoxCustomSettings.setChecked(True)
+                        self.textEditCustomSettings.setPlainText(p['command_line'])
+
+    def delete_preset(self):
+        if os.path.isfile(os.path.join(self.current_dir, 'Presets', self.comboBoxPresets.currentText() + '.json')):
+            os.remove(os.path.join(self.current_dir, 'Presets', self.comboBoxPresets.currentText() + '.json'))
+            self.comboBoxPresets.clear()
+            self.load_preset_startup()
+
+    def load_preset_startup(self):
+        if os.path.exists(os.path.join(self.current_dir, "Presets")):
+            files = os.listdir(os.path.join(self.current_dir, "Presets"))
+            for file in files:
+                if file.endswith(".json"):
+                    self.comboBoxPresets.addItem(os.path.splitext(os.path.basename(file))[0])
+
+    def save_preset(self, preset_name):
+        # Create Preset Folder if not existant
+        out_path = Path(os.path.join(self.current_dir, "Presets"))
+        out_path.mkdir(parents=True, exist_ok=True)
+
+        save_data = {}
+        save_data['settings'] = []
+        save_data['settings'].append({
+            'splitting_method': self.comboBoxSplittingMethod.currentIndex(),
+            'splitting_scene_threshold': self.doubleSpinBoxFFmpegSceneThreshold.value(),
+            'splitting_chunking_length': self.spinBoxChunking.value(),
+            'splitting_chunking_reencode': self.checkBoxSplittingReencode.isChecked(),
+            'splitting_chunking_codec': self.comboBoxSplittingReencode.currentIndex(),
+            'worker_count': self.comboBoxWorkerCount.currentIndex(),
+            'video_encoder': self.comboBoxEncoder.currentIndex(),
+            'video_bit_depth': self.comboBoxBitDepth.currentIndex(),
+            'video_color_fmt': self.comboBoxColorFormat.currentIndex(),
+            'video_speed': self.horizontalSliderEncoderSpeed.value(),
+            'video_passes': self.comboBoxPasses.currentIndex(),
+            'video_advanced': self.checkBoxAdvancedSettings.isChecked(),
+            'video_q': self.radioButtonCQ.isChecked(),
+            'video_vbr': self.radioButtonVBR.isChecked(),
+            'video_q_amount': self.horizontalSliderQ.value(),
+            'video_vbr_amount': self.spinBoxVBR.value()
+        })
+
+        save_data['filters'] = []
+        save_data['filters'].append({
+            'filters_crop': self.groupBoxCrop.isChecked(),
+            'filters_crop_top': self.spinBoxFilterCropTop.value(),
+            'filters_crop_right': self.spinBoxFilterCropRight.value(),
+            'filters_crop_bottom': self.spinBoxFilterCropBottom.value(),
+            'filters_crop_left': self.spinBoxFilterCropLeft.value(),
+            'filters_resize': self.groupBoxResize.isChecked(),
+            'filters_resize_width': self.spinBoxFilterResizeWidth.value(),
+            'filters_resize_height': self.spinBoxFilterResizeHeight.value(),
+            'filters_rotate': self.groupBoxRotate.isChecked(),
+            'filters_rotate_amount': self.comboBoxRotate.currentIndex(),
+            'filters_deinterlace': self.groupBoxDeinterlace.isChecked(),
+            'filters_deinterlace_type': self.comboBoxDeinterlace.currentIndex()
+        })
+
+        save_data['audio'] = []
+        save_data['audio'].append({
+            'track_one': self.groupBoxTrackOne.isChecked(),
+            'track_two': self.groupBoxTrackTwo.isChecked(),
+            'track_three': self.groupBoxTrackThree.isChecked(),
+            'track_four': self.groupBoxTrackFour.isChecked(),
+            'track_one_codec': self.comboBoxTrackOneCodec.currentIndex(),
+            'track_two_codec': self.comboBoxTrackTwoCodec.currentIndex(),
+            'track_three_codec': self.comboBoxTrackThreeCodec.currentIndex(),
+            'track_four_codec': self.comboBoxTrackFourCodec.currentIndex(),
+            'track_one_bitrate': self.spinBoxTrackOneBitrate.value(),
+            'track_two_bitrate': self.spinBoxTrackTwoBitrate.value(),
+            'track_three_bitrate': self.spinBoxTrackThreeBitrate.value(),
+            'track_four_bitrate': self.spinBoxTrackFourBitrate.value(),
+            'track_one_layout': self.comboBoxTrackOneLayout.currentIndex(),
+            'track_two_layout': self.comboBoxTrackTwoLayout.currentIndex(),
+            'track_three_layout': self.comboBoxTrackThreeLayout.currentIndex(),
+            'track_four_layout': self.comboBoxTrackFourLayout.currentIndex(),
+            'track_one_language': self.comboBoxTrackOneLanguage.currentIndex(),
+            'track_two_language': self.comboBoxTrackTwoLanguage.currentIndex(),
+            'track_three_language': self.comboBoxTrackThreeLanguage.currentIndex(),
+            'track_four_language': self.comboBoxTrackFourLanguage.currentIndex()
+        })
+
+        if self.checkBoxAdvancedSettings.isChecked():
+            self.groupBoxCustomSettings.setChecked(True)
+            save_data['advanced_settings'] = []
+            save_data['advanced_settings'].append({
+                'command_line': self.textEditCustomSettings.toPlainText()
+            })
+
+        # Save JSON
+        with open(os.path.join(self.current_dir, 'Presets', preset_name + ".json"), 'w') as outfile:
+            json.dump(save_data, outfile)
+        self.comboBoxPresets.clear()
+        self.load_preset_startup()
 
     #  ════════════════════════════════════════ Filters ═══════════════════════════════════════
 
@@ -499,6 +714,7 @@ class neav1e(QtWidgets.QMainWindow):
         self.thread_scene_detect.start()
 
     #  ═════════════════════════════════════════ Main ═════════════════════════════════════════
+
     def main_entry(self):
         # Check if input and output is set
         if self.video_input and self.video_output:
@@ -509,6 +725,7 @@ class neav1e(QtWidgets.QMainWindow):
             print("Not Implemented")
 
     #  ══════════════════════════════════ Command Generator ═══════════════════════════════════
+
     def set_pipe_color_fmt(self):
         fmt = None
         space = self.comboBoxColorFormat.currentIndex()
@@ -640,7 +857,7 @@ class neav1e(QtWidgets.QMainWindow):
         self.set_pipe_color_fmt()
 
         if self.groupBoxCustomSettings.isChecked():
-            self.encoder_settings = self.textEditCustomSettings.text()
+            self.encoder_settings = self.textEditCustomSettings.toPlainText()
         else:
             self.set_encoder_settings()
 
@@ -693,6 +910,7 @@ class neav1e(QtWidgets.QMainWindow):
                             self.video_queue_second_pass.append("ffmpeg -i " + temp_input_file + " -pix_fmt " + self.pipe_color_fmt + " -color_range 0 -vsync 0 -f yuv4mpegpipe - | " + self.encoder_settings + self.encoder_passes + self.encoder_pass_two + self.encoder_output + temp_output_file + self.encoder_output_stats + temp_output_file_log)
 
     #  ═══════════════════════════════════════ Encoding ═══════════════════════════════════════
+
     def main_encode(self):
         self.labelStatus.setText("Status: Encoding")
 
@@ -724,6 +942,7 @@ class neav1e(QtWidgets.QMainWindow):
         self.labelStatus.setText("Status: Finished")
 
     #  ════════════════════════════════════════ Muxing ════════════════════════════════════════
+
     def main_muxing(self):
         # Creates the list file of all encoded chunks for ffmpeg concat
         files = os.listdir(os.path.join(self.tempDir, self.temp_dir_file_name, "Chunks"))
