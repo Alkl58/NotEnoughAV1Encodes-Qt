@@ -37,7 +37,6 @@ For Windows users check out the non Qt version: [NotEnoughAV1Encodes](https://gi
 - [ ] (Basic Subtitle Support)
 - [X] Better Progress Handling
 - [ ] Batch Encoding
-- [ ] Cancel Process
 - [ ] Resume Process
 - [X] Clear temp files after encode
 - [ ] Logging

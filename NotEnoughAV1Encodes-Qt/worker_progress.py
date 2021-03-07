@@ -45,4 +45,3 @@ class WorkerProgress(QObject):
                 mux_file_not_written = False
             self.progress.emit(total_encoded_frames)
         self.finished.emit()
-

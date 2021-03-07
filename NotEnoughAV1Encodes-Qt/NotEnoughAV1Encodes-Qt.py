@@ -2,6 +2,7 @@
 # This Python file uses the following encoding: utf-8
 
 import os
+import re
 import sys
 import json
 import shutil
@@ -91,6 +92,8 @@ class neav1e(QtWidgets.QMainWindow):
 
         # Controls Encoder
         self.comboBoxEncoder.currentIndexChanged.connect(self.set_encoder_ui)
+        self.comboBoxBitDepth.currentIndexChanged.connect(self.set_ui_bitdepth)
+        self.comboBoxColorFormat.currentIndexChanged.connect(self.set_ui_color_format)
         self.comboBoxPasses.currentIndexChanged.connect(self.set_encoder_pass_rav1e)
         self.radioButtonVBR.toggled.connect(self.toggle_vbr_q)
         self.checkBoxAdvancedSettings.stateChanged.connect(self.toggle_advanced_settings)
@@ -102,6 +105,7 @@ class neav1e(QtWidgets.QMainWindow):
 
         # Preferences
         self.checkBoxDeleteTempFiles.stateChanged.connect(self.save_preferences)
+        self.checkBoxPixelAutoDetect.stateChanged.connect(self.save_preferences)
         self.pushButtonGithub.clicked.connect(self.open_github)
 
         # Preset
@@ -225,7 +229,7 @@ class neav1e(QtWidgets.QMainWindow):
         return value
 
     def ffprobe_audio_detect(self):
-        cmd="ffprobe -i " + '\u0022' + self.video_input + '\u0022' + "  -loglevel error -select_streams a -show_entries stream=index -of csv=p=1"
+        cmd="ffprobe -i " + '\u0022' + self.video_input + '\u0022' + " -loglevel error -select_streams a -show_entries stream=index -of csv=p=1"
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,universal_newlines=True, shell=True)
 
         temp = []
@@ -257,6 +261,42 @@ class neav1e(QtWidgets.QMainWindow):
 
     #  ═══════════════════════════════════════ UI Logic ═══════════════════════════════════════
 
+    def set_ui_color_format(self):
+        self.labelSummaryColorFormat.setText(self.comboBoxColorFormat.currentText())
+
+    def set_ui_bitdepth(self):
+        self.labelSummaryBitdepth.setText(self.comboBoxBitDepth.currentText())
+
+    def ffprobe_pixel_format_detect(self):
+        cmd="ffprobe -i " + '\u0022' + self.video_input + '\u0022' + " -v error -select_streams v -of default=noprint_wrappers=1:nokey=1 -show_entries stream=pix_fmt"
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,universal_newlines=True, shell=True)
+        temp = []
+        for line in process.stdout:
+            temp.append(line)
+
+        yuv420p = bool(re.search("^yuv420p", temp[0].strip("\n")))
+        yuv422p = bool(re.search("^yuv422p", temp[0].strip("\n")))
+        yuv444p = bool(re.search("^yuv444p", temp[0].strip("\n")))
+        le10 = bool(re.search("10le$", temp[0].strip("\n")))
+        le12 = bool(re.search("12le$", temp[0].strip("\n")))
+
+        if yuv420p:
+            self.comboBoxColorFormat.setCurrentIndex(0)
+        elif yuv422p:
+            self.comboBoxColorFormat.setCurrentIndex(1)
+        elif yuv444p:
+            self.comboBoxColorFormat.setCurrentIndex(2)
+        
+        if le10:
+            #10bit
+            self.comboBoxBitDepth.setCurrentIndex(1)
+        elif le12:
+            #12bit
+            self.comboBoxBitDepth.setCurrentIndex(2)
+        else:
+            #8bit
+            self.comboBoxBitDepth.setCurrentIndex(0)
+
     def first_time_startup_dependencie_check(self):
         ffmpeg_found = which("ffmpeg") is not None
         ffprobe_found = which("ffprobe") is not None
@@ -276,7 +316,7 @@ class neav1e(QtWidgets.QMainWindow):
         msg.exec()
 
     def first_time_startup(self):
-        if os.path.isfile(os.path.join(self.current_dir, "preferences.json")) == False:
+        if os.path.isfile(os.path.join(self.current_dir, "preferences.json")) is False:
             text = "Please read before continuing:"
             text += "\n➔ There is no cancellation, due to technical limitations"
             text += "\n➔ Using too many workers can result in a laggy Desktop"
@@ -425,6 +465,8 @@ class neav1e(QtWidgets.QMainWindow):
             self.video_input = fname
             self.temp_dir_file_name = os.path.splitext(os.path.basename(fname))[0]
             self.ffprobe_audio_detect()
+            if self.checkBoxPixelAutoDetect.isChecked():
+                self.ffprobe_pixel_format_detect()
 
     def set_video_destination(self):
         fname, _ = QFileDialog.getSaveFileName(self, 'Select Video Output', '',"Video files (*.webm *.mp4 *.mkv)")
@@ -617,7 +659,8 @@ class neav1e(QtWidgets.QMainWindow):
         save_data['preferences'] = []
         save_data['preferences'].append({
             'preset': self.comboBoxPresets.currentText(),
-            'delete_temp_files': self.checkBoxDeleteTempFiles.isChecked()
+            'delete_temp_files': self.checkBoxDeleteTempFiles.isChecked(),
+            'pixel_autodetect': self.checkBoxPixelAutoDetect.isChecked()
         })
         # Save JSON
         with open(os.path.join(self.current_dir, "preferences.json"), 'w') as outfile:
@@ -628,11 +671,15 @@ class neav1e(QtWidgets.QMainWindow):
             with open(os.path.join(self.current_dir, "preferences.json")) as json_file:
                 data = json.load(json_file)
                 for p in data['preferences']:
-                    self.checkBoxDeleteTempFiles.setChecked(p['delete_temp_files'])
-                    index = self.comboBoxPresets.findText(p['preset'], Qt.MatchFixedString)
-                    if index >= 0:
-                        self.comboBoxPresets.setCurrentIndex(index)
-                        self.load_preset()
+                    try:
+                        self.checkBoxDeleteTempFiles.setChecked(p['delete_temp_files'])
+                        self.checkBoxPixelAutoDetect.setChecked(p['pixel_autodetect'])
+                        index = self.comboBoxPresets.findText(p['preset'], Qt.MatchFixedString)
+                        if index >= 0:
+                            self.comboBoxPresets.setCurrentIndex(index)
+                            self.load_preset()
+                    except:
+                        pass
 
 
     #  ════════════════════════════════════════ Filters ═══════════════════════════════════════
