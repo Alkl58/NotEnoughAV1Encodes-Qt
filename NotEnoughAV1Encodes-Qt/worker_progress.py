@@ -28,7 +28,8 @@ class WorkerProgress(QObject):
         """
         mux_file_not_written = True
         while mux_file_not_written:
-            time.sleep(1)
+            # Pulls the framecount every 2 seconds
+            time.sleep(2)
             total_encoded_frames = 0
 
             for filename in os.listdir(progress_path):

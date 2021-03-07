@@ -44,6 +44,7 @@ class neav1e(QtWidgets.QMainWindow):
     encoder_pass_two = None
     pipe_color_fmt = None
     filter_command = None
+    total_frame_count = 0
 
     current_dir = os.path.dirname(os.path.abspath(__file__))
     tempDir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Temp")
@@ -79,7 +80,6 @@ class neav1e(QtWidgets.QMainWindow):
 
         # Controls Start / Stop
         self.pushButtonStart.clicked.connect(self.main_entry)
-        # self.pushButtonCancel.clicked.connect(self.encode_audio)
 
         # Controls Splitting
         self.comboBoxSplittingMethod.currentIndexChanged.connect(self.splitting_ui)
@@ -141,6 +141,8 @@ class neav1e(QtWidgets.QMainWindow):
             msg.exec()
             # Exit Program
             sys.exit()
+
+        self.first_time_startup()
 
         # Show the GUI
         self.show()
@@ -255,6 +257,39 @@ class neav1e(QtWidgets.QMainWindow):
 
     #  ═══════════════════════════════════════ UI Logic ═══════════════════════════════════════
 
+    def first_time_startup_dependencie_check(self):
+        ffmpeg_found = which("ffmpeg") is not None
+        ffprobe_found = which("ffprobe") is not None
+        aomenc_found = which("aomenc") is not None
+        rav1e_found = which("rav1e") is not None
+        svt_av1_found = which("SvtAv1EncApp") is not None
+        text = "ffmpeg found? : " + str(ffmpeg_found)
+        text += "\nffprobe found? : " + str(ffprobe_found)
+        text += "\n---------------"
+        text += "\naomenc found? : " + str(aomenc_found)
+        text += "\nrav1e found? : " + str(rav1e_found)
+        text += "\nsvt-av1 found? : " + str(svt_av1_found)
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Information)
+        msg.setText(text)
+        msg.setWindowTitle("Dependency Check")
+        msg.exec()
+
+    def first_time_startup(self):
+        if os.path.isfile(os.path.join(self.current_dir, "preferences.json")) == False:
+            text = "Please read before continuing:"
+            text += "\n➔ There is no cancellation, due to technical limitations"
+            text += "\n➔ Using too many workers can result in a laggy Desktop"
+            text += "\n➔ It is recommended to test first with small samples"
+            text += "\n➔ This software is licensed under GNU GPL v3.0"
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Information)
+            msg.setText(text)
+            msg.setWindowTitle("First Launch")
+            msg.exec()
+            self.first_time_startup_dependencie_check()
+            self.save_preferences()
+
     def open_github(self):
         webbrowser.open('https://github.com/Alkl58/NotEnoughAV1Encodes-Qt', new=2)
 
@@ -351,6 +386,7 @@ class neav1e(QtWidgets.QMainWindow):
 
     def report_progress(self, signal):
         self.progressBar.setValue(signal)
+        self.labelStatus.setText("Status: " + str(signal) + " / " + str(self.total_frame_count) + " Frames")
 
     def set_q_slider_value(self):
         self.labelQ.setText(str(self.horizontalSliderQ.value()))
@@ -944,6 +980,8 @@ class neav1e(QtWidgets.QMainWindow):
         if self.groupBoxDeinterlace.isChecked() and self.comboBoxDeinterlace.currentIndex() == 1:
             frame_count = frame_count * 2
         self.progressBar.setMaximum(frame_count)
+        self.labelStatus.setText("Status: 0 / " + str(frame_count) + " Frames")
+        self.total_frame_count = frame_count
 
     def get_source_framecount(self):
         # Create a QThread object
@@ -983,7 +1021,6 @@ class neav1e(QtWidgets.QMainWindow):
         self.calc_thread.start()
 
     def main_encode(self):
-        self.labelStatus.setText("Status: Encoding")
 
         pool_size = self.comboBoxWorkerCount.currentIndex() + 1
         queue_one = self.video_queue_first_pass
