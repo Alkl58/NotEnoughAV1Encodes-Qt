@@ -39,4 +39,4 @@ For Windows users check out the non Qt version: [NotEnoughAV1Encodes](https://gi
 - [ ] Batch Encoding
 - [ ] Resume Process
 - [X] Clear temp files after encode
-- [ ] Logging
+- [X] Logging

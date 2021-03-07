@@ -4187,6 +4187,19 @@
        <bool>false</bool>
       </property>
      </widget>
+     <widget class="QCheckBox" name="checkBoxLogging">
+      <property name="geometry">
+       <rect>
+        <x>30</x>
+        <y>100</y>
+        <width>301</width>
+        <height>41</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Logging</string>
+      </property>
+     </widget>
     </widget>
     <widget class="QGroupBox" name="groupBox_11">
      <property name="geometry">

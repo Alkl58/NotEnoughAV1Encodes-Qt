@@ -11,6 +11,7 @@ import subprocess
 
 from pathlib import Path
 from shutil import which
+from datetime import datetime
 from functools import partial
 from PyQt5 import QtWidgets, uic
 from PyQt5.QtCore import QThread, Qt
@@ -106,6 +107,7 @@ class neav1e(QtWidgets.QMainWindow):
         # Preferences
         self.checkBoxDeleteTempFiles.stateChanged.connect(self.save_preferences)
         self.checkBoxPixelAutoDetect.stateChanged.connect(self.save_preferences)
+        self.checkBoxLogging.stateChanged.connect(self.save_preferences)
         self.pushButtonGithub.clicked.connect(self.open_github)
 
         # Preset
@@ -151,6 +153,14 @@ class neav1e(QtWidgets.QMainWindow):
         # Show the GUI
         self.show()
 
+    def save_to_log(self, text):
+        if self.checkBoxLogging.isChecked():
+            out_path = Path(os.path.join(self.current_dir, "Logs"))
+            out_path.mkdir(parents=True, exist_ok=True)
+            now = datetime.now()
+            with open(os.path.join(self.current_dir, "Logs", self.temp_dir_file_name + ".log"), 'a') as the_file:
+                the_file.write(str(now) + " " + str(text) + '\n')
+
     #  ═════════════════════════════════════════ Audio ════════════════════════════════════════
 
     def encode_audio(self):
@@ -164,7 +174,7 @@ class neav1e(QtWidgets.QMainWindow):
         if self.groupBoxTrackThree.isChecked():
             command += self.audio_cmd_generator("3", self.comboBoxTrackFourCodec.currentText(), str(self.spinBoxTrackFourBitrate.value()), self.switch_audio_channel_layout(str(self.comboBoxTrackFourLayout.currentIndex())), self.switch_audio_language(self.comboBoxTrackFourLanguage.currentText()))
         command += " -af aformat=channel_layouts=" + '\u0022' + "7.1|5.1|stereo|mono" + '\u0022'
-
+        self.save_to_log(command)
         if self.groupBoxTrackOne.isChecked() or self.groupBoxTrackTwo.isChecked() or self.groupBoxTrackThree.isChecked() or self.groupBoxTrackThree.isChecked():
             out_path = Path(os.path.join(self.tempDir, self.temp_dir_file_name, "Audio"))
             out_path.mkdir(parents=True, exist_ok=True)
@@ -660,7 +670,8 @@ class neav1e(QtWidgets.QMainWindow):
         save_data['preferences'].append({
             'preset': self.comboBoxPresets.currentText(),
             'delete_temp_files': self.checkBoxDeleteTempFiles.isChecked(),
-            'pixel_autodetect': self.checkBoxPixelAutoDetect.isChecked()
+            'pixel_autodetect': self.checkBoxPixelAutoDetect.isChecked(),
+            'logging': self.checkBoxLogging.isChecked()
         })
         # Save JSON
         with open(os.path.join(self.current_dir, "preferences.json"), 'w') as outfile:
@@ -674,13 +685,13 @@ class neav1e(QtWidgets.QMainWindow):
                     try:
                         self.checkBoxDeleteTempFiles.setChecked(p['delete_temp_files'])
                         self.checkBoxPixelAutoDetect.setChecked(p['pixel_autodetect'])
+                        self.checkBoxLogging.setChecked(p['logging'])
                         index = self.comboBoxPresets.findText(p['preset'], Qt.MatchFixedString)
                         if index >= 0:
                             self.comboBoxPresets.setCurrentIndex(index)
                             self.load_preset()
                     except:
                         pass
-
 
     #  ════════════════════════════════════════ Filters ═══════════════════════════════════════
 
@@ -1028,6 +1039,7 @@ class neav1e(QtWidgets.QMainWindow):
             frame_count = frame_count * 2
         self.progressBar.setMaximum(frame_count)
         self.labelStatus.setText("Status: 0 / " + str(frame_count) + " Frames")
+        self.save_to_log("Framecount : " + str(frame_count))
         self.total_frame_count = frame_count
 
     def get_source_framecount(self):
@@ -1068,11 +1080,12 @@ class neav1e(QtWidgets.QMainWindow):
         self.calc_thread.start()
 
     def main_encode(self):
-
         pool_size = self.comboBoxWorkerCount.currentIndex() + 1
         queue_one = self.video_queue_first_pass
         queue_two = self.video_queue_second_pass
-
+        self.save_to_log("Pool Size: " + str(pool_size))
+        self.save_to_log("Queue One: " + str(queue_one))
+        self.save_to_log("Queue Two: " + str(queue_two))
         # Create a QThread object
         self.thread = QThread()
         # Create a worker object
@@ -1110,9 +1123,12 @@ class neav1e(QtWidgets.QMainWindow):
             temp_video = os.path.join(self.tempDir, self.temp_dir_file_name, "temp.mkv")
             temp_audio = os.path.join(self.tempDir, self.temp_dir_file_name, "Audio", "audio.mkv")
             subprocess.call(['ffmpeg', '-y','-f', 'concat', '-safe', '0', '-i', os.path.join(self.tempDir, self.temp_dir_file_name, "Chunks", "mux.txt"), '-c', 'copy', temp_video])
+            self.save_to_log("Mux: " + str(['ffmpeg', '-y','-f', 'concat', '-safe', '0', '-i', os.path.join(self.tempDir, self.temp_dir_file_name, "Chunks", "mux.txt"), '-c', 'copy', temp_video]))
             subprocess.call(['ffmpeg', '-y','-i', temp_video, '-i', temp_audio, '-c', 'copy', self.video_output])
+            self.save_to_log("Mux: " + str(['ffmpeg', '-y','-i', temp_video, '-i', temp_audio, '-c', 'copy', self.video_output]))
         else:
             subprocess.call(['ffmpeg', '-y','-f', 'concat', '-safe', '0', '-i', os.path.join(self.tempDir, self.temp_dir_file_name, "Chunks", "mux.txt"), '-c', 'copy', self.video_output])
+            self.save_to_log("Mux: " + str(['ffmpeg', '-y','-f', 'concat', '-safe', '0', '-i', os.path.join(self.tempDir, self.temp_dir_file_name, "Chunks", "mux.txt"), '-c', 'copy', self.video_output]))
         self.delete_temp_files()
 
     def delete_temp_files(self):
