@@ -5,6 +5,21 @@ For Windows users check out the non Qt version: [NotEnoughAV1Encodes](https://gi
 
 ![](https://i.imgur.com/vAavhsE.png)
 
+### ![Linux](https://i.imgur.com/FOmiXXW.png) Installation
+*Prebuild binaries are currently in research.*
+#### Prerequisites:
+- Python >= 3.8 (recommended)
+- PyQt5: `python -m pip install pyqt5`
+- psutil: `python -m pip install psutil`
+#### Dependencies:
+- ffmpeg & ffprobe (install from your distro package manager)
+- Encoders (install atleast one): [Guide](https://github.com/Alkl58/NotEnoughAV1Encodes-Qt/wiki/Encoders-Building-Guide)
+
+*Note that the dependencies have to be in the PATH environment*
+#### Finally:
+- [Clone](https://github.com/Alkl58/NotEnoughAV1Encodes-Qt.git) or [Download](https://github.com/Alkl58/NotEnoughAV1Encodes-Qt/archive/main.zip) the repository 
+- Run `NotEnoughAV1Encodes-Qt.py` by double click on it, or launch via the terminal: `python3 NotEnoughAV1Encodes-Qt.py`
+
 ### Development Progress:
 - [X] Scene Based Splitting (FFmpeg)
 - [X] Chunked Splitting
