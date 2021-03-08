@@ -1124,7 +1124,6 @@ class neav1e(QtWidgets.QMainWindow):
 
     def calc_progress(self):
         log_path = os.path.join(self.tempDir, self.temp_dir_file_name, "Progress")
-        mux_path = os.path.join(self.tempDir, self.temp_dir_file_name, "Chunks", "mux.txt")
         # Create a QThread object
         self.calc_thread = QThread()
         # Create a worker object
@@ -1132,7 +1131,7 @@ class neav1e(QtWidgets.QMainWindow):
         # Move worker to the thread
         self.calc_worker.moveToThread(self.calc_thread)
         # Connect signals and slots
-        self.calc_thread.started.connect(partial(self.calc_worker.run, log_path, mux_path))
+        self.calc_thread.started.connect(partial(self.calc_worker.run, log_path))
         self.calc_worker.finished.connect(self.calc_thread.quit)
         self.calc_worker.finished.connect(self.calc_worker.deleteLater)
         self.calc_thread.finished.connect(self.calc_thread.deleteLater)
@@ -1164,6 +1163,10 @@ class neav1e(QtWidgets.QMainWindow):
         self.calc_progress()
 
     def worker_finished(self):
+        # Stops Progress Worker
+        self.calc_worker.stop()
+        self.calc_thread.quit()
+        self.calc_thread.wait()
         self.labelStatus.setText("Status: Muxing")
         self.main_muxing()
         self.labelStatus.setText("Status: Finished")

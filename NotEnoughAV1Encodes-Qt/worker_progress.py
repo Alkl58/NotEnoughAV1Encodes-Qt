@@ -19,17 +19,16 @@ class WorkerProgress(QObject):
     """
     progress = pyqtSignal(int)
     finished = pyqtSignal()
+    _is_running = True
     @pyqtSlot()
-    def run(self, progress_path, mux_path):
+    def run(self, progress_path):
         """
         Attributes
         ----------
         progress_path : path to where the log files are located
         """
-        mux_file_not_written = True
-        while mux_file_not_written:
+        while self._is_running:
             # Pulls the framecount every 2 seconds
-            time.sleep(2)
             total_encoded_frames = 0
             try:
                 for filename in os.listdir(progress_path):
@@ -41,7 +40,13 @@ class WorkerProgress(QObject):
                             total_encoded_frames += int(lines[idx[-1]][6:])
             except:
                 pass
-            if os.path.isfile(mux_path):
-                mux_file_not_written = False
-            self.progress.emit(total_encoded_frames)
+            if self._is_running:
+                self.progress.emit(total_encoded_frames)
+            time.sleep(2)
         self.finished.emit()
+    
+    def stop(self):
+        """
+        Stops the while loop in run()
+        """
+        self._is_running = False
