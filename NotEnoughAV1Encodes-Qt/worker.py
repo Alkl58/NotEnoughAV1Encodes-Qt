@@ -7,7 +7,7 @@ Date: 05.03.2021
 """
 from multiprocessing.dummy import Pool
 from functools import partial
-from subprocess import call
+from subprocess import call, DEVNULL
 from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot
 
 class Worker(QObject):
@@ -29,8 +29,8 @@ class Worker(QObject):
         queue_second : second pass queue list
         """
         pool = Pool(pool_size)
-        for i, _ in enumerate(pool.imap(partial(call, shell=True), queue_first)):  # Multi Threaded Encoding
+        for i, _ in enumerate(pool.imap(partial(call, shell=True, stderr=DEVNULL), queue_first)):  # Multi Threaded Encoding
             print("Finished Worker: " + str(i))
-        for i, _ in enumerate(pool.imap(partial(call, shell=True), queue_second)):  # Multi Threaded Encoding
+        for i, _ in enumerate(pool.imap(partial(call, shell=True, stderr=DEVNULL), queue_second)):  # Multi Threaded Encoding
             print("Finished Worker: " + str(i))
         self.finished.emit()

@@ -13,7 +13,7 @@ from pathlib import Path
 from shutil import which
 from datetime import datetime
 from functools import partial
-from PyQt5 import QtWidgets, uic
+from PyQt5 import QtWidgets, uic, QtGui
 from PyQt5.QtCore import QThread, Qt
 from PyQt5.QtWidgets import QFileDialog, QMessageBox, QInputDialog
 
@@ -30,6 +30,9 @@ class neav1e(QtWidgets.QMainWindow):
 
     video_input = None
     video_output = None
+
+    encode_started = False
+    encode_paused = False
 
     null_path = os.devnull
 
@@ -78,10 +81,11 @@ class neav1e(QtWidgets.QMainWindow):
 
         # Controls IO
         self.pushButtonOpenSource.clicked.connect(self.open_video_source)
-        self.pushButtonSaveTo.clicked.connect(self.set_video_destination)
+        self.pushButtonSaveTo.clicked.connect(self.set_video_destination)        
 
         # Controls Start / Stop
         self.pushButtonStart.clicked.connect(self.main_entry)
+        self.pushButtonPauseResume.clicked.connect(self.pause_resume_encode)
 
         # Controls Splitting
         self.comboBoxSplittingMethod.currentIndexChanged.connect(self.splitting_ui)
@@ -271,6 +275,17 @@ class neav1e(QtWidgets.QMainWindow):
 
     #  ═══════════════════════════════════════ UI Logic ═══════════════════════════════════════
 
+    def pause_resume_encode(self):
+        if self.encode_paused is False:
+            self.pause_ffmpeg()
+            self.encode_paused = True
+            self.labelStatus.setText("Status: Paused")
+            self.pushButtonPauseResume.setIcon(QtGui.QIcon('img/resume.png'))
+        else:
+            self.resume_ffmpeg()
+            self.encode_paused = False
+            self.pushButtonPauseResume.setIcon(QtGui.QIcon('img/stop.png'))
+
     def set_ui_color_format(self):
         self.labelSummaryColorFormat.setText(self.comboBoxColorFormat.currentText())
 
@@ -315,7 +330,7 @@ class neav1e(QtWidgets.QMainWindow):
         svt_av1_found = which("SvtAv1EncApp") is not None
         text = "ffmpeg found? : " + str(ffmpeg_found)
         text += "\nffprobe found? : " + str(ffprobe_found)
-        text += "\n---------------"
+        text += "\n__________________"
         text += "\naomenc found? : " + str(aomenc_found)
         text += "\nrav1e found? : " + str(rav1e_found)
         text += "\nsvt-av1 found? : " + str(svt_av1_found)
@@ -328,7 +343,7 @@ class neav1e(QtWidgets.QMainWindow):
     def first_time_startup(self):
         if os.path.isfile(os.path.join(self.current_dir, "preferences.json")) is False:
             text = "Please read before continuing:"
-            text += "\n➔ There is no cancellation, due to technical limitations"
+            text += "\n➔ You can pause and resume the encoding process"
             text += "\n➔ Using too many workers can result in a laggy Desktop"
             text += "\n➔ It is recommended to test first with small samples"
             text += "\n➔ This software is licensed under GNU GPL v3.0"
@@ -831,11 +846,18 @@ class neav1e(QtWidgets.QMainWindow):
     def main_entry(self):
         # Check if input and output is set
         if self.video_input and self.video_output:
-            self.progressBar.setValue(0)
-            # Audio Encoding
-            self.encode_audio()
+            if self.encode_started is False:
+                self.progressBar.setValue(0)
+                # Audio Encoding
+                self.encode_started = True
+                self.encode_audio()
+
         else:
-            print("Not Implemented")
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Warning)
+            msg.setText("Please set Input and Output!")
+            msg.setWindowTitle("Attention")
+            msg.exec()
 
     #  ══════════════════════════════════ Command Generator ═══════════════════════════════════
 
@@ -1031,6 +1053,26 @@ class neav1e(QtWidgets.QMainWindow):
 
     #  ═══════════════════════════════════════ Encoding ═══════════════════════════════════════
 
+    def pause_ffmpeg(self):
+        tasklist=['ffmpeg']
+        out=[]
+        for proc in psutil.process_iter():
+            if any(task in proc.name() for task in tasklist):
+                out.append(proc.pid)
+        for pid in out:
+            p = psutil.Process(pid)
+            p.suspend()
+
+    def resume_ffmpeg(self):
+        tasklist=['ffmpeg']
+        out=[]
+        for proc in psutil.process_iter():
+            if any(task in proc.name() for task in tasklist):
+                out.append(proc.pid)
+        for pid in out:
+            p = psutil.Process(pid)
+            p.resume()
+
     def set_framecount(self, count):
         frame_count = count
         if self.comboBoxPasses.currentIndex() == 1:
@@ -1059,11 +1101,9 @@ class neav1e(QtWidgets.QMainWindow):
         # Start the thread
         self.frame_thread.start()
 
-
     def calc_progress(self):
         log_path = os.path.join(self.tempDir, self.temp_dir_file_name, "Progress")
         mux_path = os.path.join(self.tempDir, self.temp_dir_file_name, "Chunks", "mux.txt")
-        print(mux_path)
         # Create a QThread object
         self.calc_thread = QThread()
         # Create a worker object
@@ -1130,6 +1170,7 @@ class neav1e(QtWidgets.QMainWindow):
             subprocess.call(['ffmpeg', '-y','-f', 'concat', '-safe', '0', '-i', os.path.join(self.tempDir, self.temp_dir_file_name, "Chunks", "mux.txt"), '-c', 'copy', self.video_output])
             self.save_to_log("Mux: " + str(['ffmpeg', '-y','-f', 'concat', '-safe', '0', '-i', os.path.join(self.tempDir, self.temp_dir_file_name, "Chunks", "mux.txt"), '-c', 'copy', self.video_output]))
         self.delete_temp_files()
+        self.encode_started = False
 
     def delete_temp_files(self):
         if self.checkBoxDeleteTempFiles.isChecked():
