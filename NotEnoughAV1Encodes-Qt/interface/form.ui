@@ -4204,9 +4204,9 @@
     <widget class="QGroupBox" name="groupBox_11">
      <property name="geometry">
       <rect>
-       <x>710</x>
+       <x>590</x>
        <y>10</y>
-       <width>91</width>
+       <width>211</width>
        <height>101</height>
       </rect>
      </property>
@@ -4228,6 +4228,52 @@
       <property name="icon">
        <iconset>
         <normaloff>../img/github.png</normaloff>../img/github.png</iconset>
+      </property>
+      <property name="iconSize">
+       <size>
+        <width>42</width>
+        <height>42</height>
+       </size>
+      </property>
+     </widget>
+     <widget class="QPushButton" name="pushButtonDiscord">
+      <property name="geometry">
+       <rect>
+        <x>80</x>
+        <y>30</y>
+        <width>51</width>
+        <height>51</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string/>
+      </property>
+      <property name="icon">
+       <iconset>
+        <normaloff>../img/discord.png</normaloff>../img/discord.png</iconset>
+      </property>
+      <property name="iconSize">
+       <size>
+        <width>42</width>
+        <height>42</height>
+       </size>
+      </property>
+     </widget>
+     <widget class="QPushButton" name="pushButtonPayPal">
+      <property name="geometry">
+       <rect>
+        <x>140</x>
+        <y>30</y>
+        <width>51</width>
+        <height>51</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string/>
+      </property>
+      <property name="icon">
+       <iconset>
+        <normaloff>../img/paypal.png</normaloff>../img/paypal.png</iconset>
       </property>
       <property name="iconSize">
        <size>

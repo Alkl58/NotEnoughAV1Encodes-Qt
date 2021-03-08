@@ -3,7 +3,7 @@ Linux GUI for AV1 Encoders - aomenc, rav1e & svt-av1
 
 For Windows users check out the non Qt version: [NotEnoughAV1Encodes](https://github.com/Alkl58/NotEnoughAV1Encodes)
 
-![](https://i.imgur.com/vAavhsE.png)
+![](https://i.imgur.com/U1w21Zu.png)
 
 ### ![Linux](https://i.imgur.com/FOmiXXW.png) Installation
 *Prebuild binaries are currently in research.*

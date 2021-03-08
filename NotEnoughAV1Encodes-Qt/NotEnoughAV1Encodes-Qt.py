@@ -81,7 +81,7 @@ class neav1e(QtWidgets.QMainWindow):
 
         # Controls IO
         self.pushButtonOpenSource.clicked.connect(self.open_video_source)
-        self.pushButtonSaveTo.clicked.connect(self.set_video_destination)        
+        self.pushButtonSaveTo.clicked.connect(self.set_video_destination)
 
         # Controls Start / Stop
         self.pushButtonStart.clicked.connect(self.main_entry)
@@ -113,6 +113,8 @@ class neav1e(QtWidgets.QMainWindow):
         self.checkBoxPixelAutoDetect.stateChanged.connect(self.save_preferences)
         self.checkBoxLogging.stateChanged.connect(self.save_preferences)
         self.pushButtonGithub.clicked.connect(self.open_github)
+        self.pushButtonDiscord.clicked.connect(self.open_discord)
+        self.pushButtonPayPal.clicked.connect(self.open_paypal)
 
         # Preset
         self.pushButtonSaveNewPreset.clicked.connect(self.save_new_preset)
@@ -354,6 +356,12 @@ class neav1e(QtWidgets.QMainWindow):
             msg.exec()
             self.first_time_startup_dependencie_check()
             self.save_preferences()
+
+    def open_discord(self):
+        webbrowser.open('https://discord.gg/yG27ArHBFe', new=2)
+
+    def open_paypal(self):
+        webbrowser.open('https://paypal.me/alkl58', new=2)
 
     def open_github(self):
         webbrowser.open('https://github.com/Alkl58/NotEnoughAV1Encodes-Qt', new=2)
@@ -1055,23 +1063,15 @@ class neav1e(QtWidgets.QMainWindow):
 
     def pause_ffmpeg(self):
         tasklist=['ffmpeg']
-        out=[]
         for proc in psutil.process_iter():
             if any(task in proc.name() for task in tasklist):
-                out.append(proc.pid)
-        for pid in out:
-            p = psutil.Process(pid)
-            p.suspend()
+                psutil.Process(proc.pid).suspend()
 
     def resume_ffmpeg(self):
         tasklist=['ffmpeg']
-        out=[]
         for proc in psutil.process_iter():
             if any(task in proc.name() for task in tasklist):
-                out.append(proc.pid)
-        for pid in out:
-            p = psutil.Process(pid)
-            p.resume()
+                psutil.Process(proc.pid).resume()
 
     def set_framecount(self, count):
         frame_count = count
