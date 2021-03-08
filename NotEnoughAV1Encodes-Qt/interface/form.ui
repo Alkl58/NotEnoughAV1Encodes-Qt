@@ -4211,7 +4211,7 @@
       </rect>
      </property>
      <property name="title">
-      <string>Version 0.1</string>
+      <string>Version 0.1.0</string>
      </property>
      <widget class="QPushButton" name="pushButtonGithub">
       <property name="geometry">
@@ -4286,8 +4286,8 @@
     <widget class="QLabel" name="label_58">
      <property name="geometry">
       <rect>
-       <x>650</x>
-       <y>360</y>
+       <x>640</x>
+       <y>370</y>
        <width>161</width>
        <height>31</height>
       </rect>

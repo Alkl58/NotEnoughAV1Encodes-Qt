@@ -19,15 +19,16 @@ class WorkerScene(QObject):
     """
     finished = pyqtSignal()
     @pyqtSlot()
-    def run(self, video_input, threshold, splitting_output):
+    def run(self, video_input, threshold, splitting_output, ffmpeg_path):
         """
         Attributes
         ----------
         video_input : string - path of the video input file
         threshold : float as string - scene detection threshold
         splitting_output : string - path of the split.txt output
+        ffmpeg_path : path to ffmpeg
         """
-        cmd="ffmpeg -i " + '\u0022' + video_input + '\u0022' + " -hide_banner -loglevel 32 -filter_complex select=" + '\u0022' + "gt(scene\\," + threshold + "),select=eq(key\\,1),showinfo" + '\u0022' + " -an -f null -"
+        cmd = '\u0022' + ffmpeg_path + '\u0022' + " -i " + '\u0022' + video_input + '\u0022' + " -hide_banner -loglevel 32 -filter_complex select=" + '\u0022' + "gt(scene\\," + threshold + "),select=eq(key\\,1),showinfo" + '\u0022' + " -an -f null -"
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,universal_newlines=True, shell=True)
 
         temp = []

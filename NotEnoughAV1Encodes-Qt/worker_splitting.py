@@ -18,7 +18,7 @@ class WorkerSplitting(QObject):
     """
     finished = pyqtSignal()
     @pyqtSlot()
-    def run(self, video_input, video_codec, seg_time, splitting_output):
+    def run(self, video_input, video_codec, seg_time, splitting_output, ffmpeg_path):
         """
         Attributes
         ----------
@@ -26,6 +26,7 @@ class WorkerSplitting(QObject):
         video_codec : string - video codec for reencoding while splitting (x264, utvideo, ffv1)
         seg_time : int as string - chunk length in seconds
         splitting_output : string - path of the chunked video output
+        ffmpeg_path : path to ffmpeg
         """
-        subprocess.call(['ffmpeg', '-y','-i', video_input, '-map_metadata', '-1', '-c:v'] + video_codec + ['-f', 'segment', '-segment_time', seg_time, splitting_output])
+        subprocess.call([ffmpeg_path, '-y','-i', video_input, '-map_metadata', '-1', '-c:v'] + video_codec + ['-f', 'segment', '-segment_time', seg_time, splitting_output])
         self.finished.emit()

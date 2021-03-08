@@ -5,8 +5,12 @@ For Windows users check out the non Qt version: [NotEnoughAV1Encodes](https://gi
 
 ![](https://i.imgur.com/U1w21Zu.png)
 
-### ![Linux](https://i.imgur.com/FOmiXXW.png) Installation
-*Prebuild binaries are currently in research.*
+### ![Linux](https://i.imgur.com/FOmiXXW.png) ![Windows](https://i.imgur.com/Ql4lP4E.png) Pre-Build
+
+#### Stable Builds: [Releases](https://github.com/Alkl58/NotEnoughAV1Encodes-Qt/releases)
+
+### ![Linux](https://i.imgur.com/FOmiXXW.png) Manual Installation
+
 #### Prerequisites:
 - Python >= 3.8 (recommended)
 - PyQt5: `python -m pip install pyqt5`

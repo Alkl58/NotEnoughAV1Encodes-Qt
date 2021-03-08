@@ -31,16 +31,16 @@ class WorkerProgress(QObject):
             # Pulls the framecount every 2 seconds
             time.sleep(2)
             total_encoded_frames = 0
-
-            for filename in os.listdir(progress_path):
-                if filename.endswith(".log"):
-                    try:
-                        with open(os.path.join(progress_path, filename), 'r') as file_log:
-                            lines = [line.rstrip() for line in file_log]
-                        idx = [i for i, item in enumerate(lines) if item.startswith('frame')]
-                        total_encoded_frames += int(lines[idx[-1]][6:])
-                    except:
-                        pass
+            try:
+                for filename in os.listdir(progress_path):
+                    if filename.endswith(".log"):
+                        
+                            with open(os.path.join(progress_path, filename), 'r') as file_log:
+                                lines = [line.rstrip() for line in file_log]
+                            idx = [i for i, item in enumerate(lines) if item.startswith('frame')]
+                            total_encoded_frames += int(lines[idx[-1]][6:])
+            except:
+                pass
             if os.path.isfile(mux_path):
                 mux_file_not_written = False
             self.progress.emit(total_encoded_frames)
