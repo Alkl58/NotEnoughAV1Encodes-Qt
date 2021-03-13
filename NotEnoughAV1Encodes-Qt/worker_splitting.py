@@ -28,5 +28,6 @@ class WorkerSplitting(QObject):
         splitting_output : string - path of the chunked video output
         ffmpeg_path : path to ffmpeg
         """
-        subprocess.call([ffmpeg_path, '-y','-i', video_input, '-map_metadata', '-1', '-c:v'] + video_codec + ['-f', 'segment', '-segment_time', seg_time, splitting_output])
+        cmd = '\u0022' + ffmpeg_path + '\u0022' + " -i " + '\u0022' + video_input + '\u0022' + " -hide_banner -loglevel 32 -map_metadata -1 -c:v " + video_codec + " -f segment -segment_time " + seg_time + " " + splitting_output
+        subprocess.call(cmd, shell=True)
         self.finished.emit()

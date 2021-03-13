@@ -376,7 +376,6 @@ class neav1e(QtWidgets.QMainWindow):
         if os.path.isfile(os.path.join(self.current_dir, "encoders", "ffprobe")) or os.path.isfile(os.path.join(self.current_dir, "encoders", "ffprobe.exe")):
             self.ffprobe_path = os.path.join(self.current_dir, "encoders","ffprobe")
             
-
     def open_discord(self):
         webbrowser.open('https://discord.gg/yG27ArHBFe', new=2)
 
@@ -808,6 +807,7 @@ class neav1e(QtWidgets.QMainWindow):
         out_path.mkdir(parents=True, exist_ok=True)
         # Select the correct splitting method
         current_index = self.comboBoxSplittingMethod.currentIndex()
+        self.set_video_filters()
         if current_index == 0:
             # FFmpeg Scene Detect
             self.labelStatus.setText("Status: Detecting Scenes")
@@ -818,19 +818,20 @@ class neav1e(QtWidgets.QMainWindow):
             self.ffmpeg_chunking()
 
     def ffmpeg_chunking(self):
-        video_codec = [ ]
+        video_codec = ""
         # Set Splitting Parameters
         if self.checkBoxSplittingReencode.isChecked() is True:
             if self.comboBoxSplittingReencode.currentIndex() == 0:
-                video_codec = ['libx264', '-crf', '0', '-preset', 'ultrafast']
+                video_codec = "libx264 -crf 0 -preset ultrafast"
             elif self.comboBoxSplittingReencode.currentIndex() == 1:
-                video_codec = ['ffv1', '-level', '3', '-threads', '6', '-coder', '1', '-context', '1', '-g', '1', '-slicecrc', '0', '-slices', '4']
+                video_codec = "ffv1 -level 3 -threads 6 -coder 1 -context 1 -g 1 -slicecrc 0 -slices 4"
             elif self.comboBoxSplittingReencode.currentIndex() == 2:
-                video_codec = ['utvideo']
+                video_codec = "utvideo"
         else:
-            video_codec = ['copy']
+            video_codec = "copy"
         seg_time = str(self.spinBoxChunking.value())
         splitting_output = os.path.join(self.tempDir, self.temp_dir_file_name, "Chunks", "split%6d.mkv")
+        video_codec += " " + self.filter_command
 
         # Create a QThread object
         self.thread_split = QThread()
@@ -1017,7 +1018,6 @@ class neav1e(QtWidgets.QMainWindow):
         self.video_queue_first_pass = []
         self.video_queue_second_pass = []
 
-        self.set_video_filters()
         self.set_pipe_color_fmt()
 
         if self.groupBoxCustomSettings.isChecked():
