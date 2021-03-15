@@ -44,3 +44,9 @@ For Windows users check out the non Qt version: [NotEnoughAV1Encodes](https://gi
 - [X] Pause and Resume Process
 - [X] Clear temp files after encode
 - [X] Logging
+
+
+#### Supporting me
+PayPal: paypal.me/alkl58
+
+Monero: 46k9vyT84U3gFZsr9oH8fbLGm6avBeY651F2c166BQ8E7eHeEhVvDujjAzBjHK2xDVaxGPav7bQbZJSpvoQm2D5XGnbRUhF
