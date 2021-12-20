@@ -132,10 +132,8 @@ class neav1e(QtWidgets.QMainWindow):
         self.load_preferences()
 
         # !!! CHANGE IN UI FILE !!!
-        self.labelSplittingChunkLength.hide()
-        self.spinBoxChunking.hide()
-        self.checkBoxSplittingReencode.hide()
-        self.comboBoxSplittingReencode.hide()
+        self.doubleSpinBoxFFmpegSceneThreshold.hide()
+        self.labelSplittingThreshold.hide()
         self.groupBoxAom.show()
         self.groupBoxRav1e.hide()
         self.groupBoxSvtav1.hide()
