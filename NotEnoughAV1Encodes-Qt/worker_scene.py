@@ -28,7 +28,7 @@ class WorkerScene(QObject):
         splitting_output : string - path of the split.txt output
         ffmpeg_path : path to ffmpeg
         """
-        cmd = '\u0022' + ffmpeg_path + '\u0022' + " -i " + '\u0022' + video_input + '\u0022' + " -hide_banner -loglevel 32 -filter_complex select=" + '\u0022' + "gt(scene\\," + threshold + "),select=eq(key\\,1),showinfo" + '\u0022' + " -an -f null -"
+        cmd = "\"" + ffmpeg_path + "\"" + " -i " + "\"" + video_input + "\"" + " -hide_banner -loglevel 32 -filter_complex select=" + "\"" + "gt(scene\\," + threshold + "),select=eq(key\\,1),showinfo" + "\"" + " -an -f null -"
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,universal_newlines=True, shell=True)
 
         temp = []

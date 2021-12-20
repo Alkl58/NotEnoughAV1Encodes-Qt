@@ -27,7 +27,7 @@ class WorkerFramecount(QObject):
         video_input : path to video input
         ffmpeg_path : path to ffmpeg
         """
-        cmd = '\u0022' + ffmpeg_path + '\u0022' + " -i " + '\u0022' + video_input + '\u0022' + " -hide_banner -loglevel 32 -map 0:v:0 -f null -"
+        cmd = "\"" + ffmpeg_path + "\"" + " -i " + "\"" + video_input + "\"" + " -hide_banner -loglevel 32 -map 0:v:0 -f null -"
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,universal_newlines=True, shell=True)
         temp = []
         for line in process.stdout:
